@@ -10,7 +10,6 @@
 
 #include <cmath>
 #include <iostream>
-#include "parameters.h"
 #include "fcc_diffusion.h"
 #include "rand_walk.h"
 
@@ -95,7 +94,8 @@ water_info *FCC::init_molecules(double L, int n, std::vector<MNP_info> *mnps,\
 std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
 {
     std::vector<MNP_info> *mnps = new std::vector<MNP_info>;
-    for (int i = 0; i < num_mnps; i++)
+    std::cout << ::num_mnps << std::endl;
+    for (int i = 0; i < ::num_mnps; i++)
     {
         double x, y, z;
         bool invalid = true;

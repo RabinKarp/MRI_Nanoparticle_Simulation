@@ -15,6 +15,7 @@
 #include <ctime>
 #include <random>
 #include <fstream>
+#include "sweep_parameters.h"
 #include "rand_walk.h"
 #include "octree.h"
 

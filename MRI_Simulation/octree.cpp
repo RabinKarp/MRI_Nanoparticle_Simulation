@@ -14,7 +14,7 @@
 #include <thread>
 #include <cassert>
 #include "octree.h"
-#include "parameters.h"
+#include "sweep_parameters.h"
 
 /*
  * Given a set of (dx, dy, dz) coordinates in the space [0, bound)^3 and a

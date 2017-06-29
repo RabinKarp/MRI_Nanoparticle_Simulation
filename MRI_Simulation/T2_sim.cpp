@@ -12,7 +12,7 @@
 #include <cassert>
 #include "octree.h"
 #include "fcc_diffusion.h"
-#include "parameters.h"
+#include "sweep_parameters.h"
 
 const double g = 42.5781e6;             // gyromagnetic ratio in MHz/T
 const int pfreq = (int)(1e-3/tau);      // print net magnetization every 1us
@@ -175,23 +175,16 @@ std::string generate_base_filename()
     return filename;
 }
 
-/*
- * Use some number of threads (specified at the top of this file) to simulate
- * the diffusion of some number of water molecules (specified at the top of the
- * file fcc_diffusion.h) through a B field for some number of time steps (also
- * specified in fcc_diffusion.h).
- */
-int main(void)
-{
+std::string simulateWaterMolecules() {
     // Initialize array containing magnetization values at each time step
     mag = new double*[num_threads];
     for (int i = 0; i < num_threads; i++)
         mag[i] = new double[t/pfreq];
-
+    
     // temporary output filenames
     std::string *temp_filenames = new std::string[num_runs];
     std::ifstream *temp_files = new std::ifstream[num_runs];
-
+    
 #ifdef DEBUG_DIFF
     // initialize arrays containing initial positions and square displacements
     init_pos = new double[3*num_water];
@@ -203,14 +196,14 @@ int main(void)
             disp[i][j] = 0;
     }
 #endif /* DEBUG_DIFF */
-
+    
     // run the full simulation the specified number of times
     for (int i = 0; i < num_runs; i++)
     {
         // Initialize PRNG and use it to seed the nanoparticles & waters
         std::random_device rd;
         XORShift<> gen(time(NULL) + rd());
-
+        
         // Initialize FCC lattice and octree
         FCC *lattice = new FCC(D_cell, D_extra, P_expr);
         std::vector<MNP_info> *mnps = lattice->init_mnps(gen);
@@ -221,18 +214,18 @@ int main(void)
         std::cout << "Octree took " << elapsed / 60 << ":";
         if (elapsed % 60 < 10) std::cout << "0";
         std::cout << elapsed % 60 << " to build." << std::endl << std::endl;
-    #ifdef DEBUG_FIELD
+#ifdef DEBUG_FIELD
         std::cout << "Since field debugging does not support any explicit ";
         std::cout << "calculation, program is exiting." << std::endl;
         exit(0);
-    #endif
-
+#endif
+        
         // Initialize water molecules
         for (int j = 0; j <= num_threads * (i+1); j++)
             gen.jump();
         water_info *w = lattice->init_molecules(bound, num_water, mnps, gen);
-
-    #ifdef DEBUG_DIFF
+        
+#ifdef DEBUG_DIFF
         // initialize starting positions for all molecules
         for (int j = 0; j < num_water; j++)
         {
@@ -240,26 +233,26 @@ int main(void)
             init_pos[3*j+1] = w[j].y;
             init_pos[3*j+2] = w[j].z;
         }
-    #endif /* DEBUG_DIFF */
+#endif /* DEBUG_DIFF */
         
         // Simulate T2 relaxation using the number of threads specified
         start = time(NULL);
         std::vector<std::thread> thds;
         for (int j = 0; j < num_threads; j++)
-            thds.emplace_back(thread_func, j, tree, w, lattice); 
+            thds.emplace_back(thread_func, j, tree, w, lattice);
         for (auto &t : thds)
             t.join();
         elapsed = time(NULL) - start;
         std::cout << "Simulation (w/o tree) took " << elapsed / 60 << ":";
         if (elapsed % 60 < 10) std::cout << "0";
         std::cout << elapsed % 60 << " to run." << std::endl << std::endl;
-
+        
         // Clean up dynamically allocated resources
         delete[] w;
         delete tree;
         delete lattice;
         delete mnps;
-
+        
         // Print output to a temporary file
         temp_filenames[i] = generate_base_filename();
         temp_filenames[i] += ".csv";
@@ -274,7 +267,7 @@ int main(void)
         }
         out_file.close();
     }
-
+    
     // Initialize each run's output as an ifstream & create a final output file
     std::ofstream final_out;
     std::string filename = generate_base_filename();
@@ -282,7 +275,7 @@ int main(void)
     final_out.open(filename);
     for (int i = 0; i < num_runs; i++)
         temp_files[i].open(temp_filenames[i]);
-
+    
     // Sum up the output from each run into the final output file
     for (int i = 0; i < t/pfreq; i++)
     {
@@ -297,7 +290,7 @@ int main(void)
         }
         final_out << "," << net_mag << std::endl;
     }
-
+    
     // Close all files and delete temporary files
     final_out.close();
     for (int i = 0; i < num_runs; i++)
@@ -307,10 +300,10 @@ int main(void)
     }
     delete[] temp_filenames;
     delete[] temp_files;
-
+    
 #ifdef DEBUG_DIFF
     /* If debugging diffusion, output a file containing the absolute values of
-     * the mean of the absolute values of the displacements of all molecules in 
+     * the mean of the absolute values of the displacements of all molecules in
      * the x, y, and z directions. */
     std::ofstream out_file;
     out_file.open("T2_sim_diffusion_stats.csv");
@@ -329,4 +322,5 @@ int main(void)
     }
     out_file.close();
 #endif /* DEBUG_DIFF */
+	return filename;
 }
