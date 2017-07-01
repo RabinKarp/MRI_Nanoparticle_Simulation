@@ -14,6 +14,8 @@
 #include "fcc_diffusion.h"
 #include "sweep_parameters.h"
 
+using namespace std;
+
 const double g = 42.5781e6;             // gyromagnetic ratio in MHz/T
 const int pfreq = (int)(1e-3/tau);      // print net magnetization every 1us
 static double **mag;                    // net magnetization data
@@ -97,9 +99,9 @@ void thread_func(const int tid, Octree *tree, water_info *molec, FCC *lattice)
             disp[tid][3*i/dfreq+2] += sum_z / num_water / num_runs;
         }
 #endif /* DEBUG_DIFF */
-        
+
 #ifdef TIMED_OUTPUT
-        // print out a progress report every million time-steps 
+        // print out a progress report every million time-steps
         if (i % 1000000 == 0)
         {
             double now = (double)(i) * tau;
@@ -109,7 +111,7 @@ void thread_func(const int tid, Octree *tree, water_info *molec, FCC *lattice)
             lock.unlock();
         }
 #endif /* TIMED_OUTPUT */
-        
+
         // apply spin echo and flip phases every odd Carr-Purcell time
         if (i % (2*tcp) == tcp)
         {
@@ -180,11 +182,11 @@ std::string simulateWaterMolecules() {
     mag = new double*[num_threads];
     for (int i = 0; i < num_threads; i++)
         mag[i] = new double[t/pfreq];
-    
+
     // temporary output filenames
     std::string *temp_filenames = new std::string[num_runs];
     std::ifstream *temp_files = new std::ifstream[num_runs];
-    
+
 #ifdef DEBUG_DIFF
     // initialize arrays containing initial positions and square displacements
     init_pos = new double[3*num_water];
@@ -196,14 +198,14 @@ std::string simulateWaterMolecules() {
             disp[i][j] = 0;
     }
 #endif /* DEBUG_DIFF */
-    
+
     // run the full simulation the specified number of times
     for (int i = 0; i < num_runs; i++)
     {
         // Initialize PRNG and use it to seed the nanoparticles & waters
         std::random_device rd;
         XORShift<> gen(time(NULL) + rd());
-        
+
         // Initialize FCC lattice and octree
         FCC *lattice = new FCC(D_cell, D_extra, P_expr);
         std::vector<MNP_info> *mnps = lattice->init_mnps(gen);
@@ -219,12 +221,12 @@ std::string simulateWaterMolecules() {
         std::cout << "calculation, program is exiting." << std::endl;
         exit(0);
 #endif
-        
+
         // Initialize water molecules
         for (int j = 0; j <= num_threads * (i+1); j++)
             gen.jump();
         water_info *w = lattice->init_molecules(bound, num_water, mnps, gen);
-        
+
 #ifdef DEBUG_DIFF
         // initialize starting positions for all molecules
         for (int j = 0; j < num_water; j++)
@@ -234,7 +236,7 @@ std::string simulateWaterMolecules() {
             init_pos[3*j+2] = w[j].z;
         }
 #endif /* DEBUG_DIFF */
-        
+
         // Simulate T2 relaxation using the number of threads specified
         start = time(NULL);
         std::vector<std::thread> thds;
@@ -246,13 +248,13 @@ std::string simulateWaterMolecules() {
         std::cout << "Simulation (w/o tree) took " << elapsed / 60 << ":";
         if (elapsed % 60 < 10) std::cout << "0";
         std::cout << elapsed % 60 << " to run." << std::endl << std::endl;
-        
+
         // Clean up dynamically allocated resources
         delete[] w;
         delete tree;
         delete lattice;
         delete mnps;
-        
+
         // Print output to a temporary file
         temp_filenames[i] = generate_base_filename();
         temp_filenames[i] += ".csv";
@@ -267,7 +269,7 @@ std::string simulateWaterMolecules() {
         }
         out_file.close();
     }
-    
+
     // Initialize each run's output as an ifstream & create a final output file
     std::ofstream final_out;
     std::string filename = generate_base_filename();
@@ -275,7 +277,7 @@ std::string simulateWaterMolecules() {
     final_out.open(filename);
     for (int i = 0; i < num_runs; i++)
         temp_files[i].open(temp_filenames[i]);
-    
+
     // Sum up the output from each run into the final output file
     for (int i = 0; i < t/pfreq; i++)
     {
@@ -290,7 +292,7 @@ std::string simulateWaterMolecules() {
         }
         final_out << "," << net_mag << std::endl;
     }
-    
+
     // Close all files and delete temporary files
     final_out.close();
     for (int i = 0; i < num_runs; i++)
@@ -300,7 +302,7 @@ std::string simulateWaterMolecules() {
     }
     delete[] temp_filenames;
     delete[] temp_files;
-    
+
 #ifdef DEBUG_DIFF
     /* If debugging diffusion, output a file containing the absolute values of
      * the mean of the absolute values of the displacements of all molecules in

@@ -4,7 +4,7 @@
  * @file    parameters.h
  * @brief   A file containing static const instantiations of all the paramaters
  *          that affect the way the simulation is conducted.
- */ 
+ */
 
 #ifndef PARAMETERS_H
 #define PARAMETERS_H

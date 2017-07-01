@@ -110,7 +110,7 @@ oct_node *Octree::find_node(oct_node *n, double wx, double wy, double wz, int d)
     // base case -- node is a leaf
     if (n->mc >> 63)
         return n;
-    
+
     // otherwise, navigate to the appropriate child and recurse
     unsigned child_no = find_child(wx, wy, wz, d);
     return find_node(n + n->child[child_no].idx, wx, wy, wz, d + 1);
@@ -237,7 +237,7 @@ double Octree::grad(double x, double y, double z, double g)
         if (NORMSQ(dx, dy, dz) < pow(sqrt(3)*g + scale*np->r, 2))
             return 0;
 
-        // Factor of 10^17 inserted by HD. See magnetic field calculation 
+        // Factor of 10^17 inserted by HD. See magnetic field calculation
         // comment for rationale
         double divisor = pow(NORMSQ(dx, dy, dz), 3.5);
         ret_x += 3e17*M*dx * (1*(dx*dx + dy*dy) - 4*dz*dz) / divisor;
@@ -294,7 +294,7 @@ void Octree::build_subtree(std::vector<oct_node> *curr, double max_prod,\
             leaf->child[i].B = B;
         }
     }
-    
+
     // Otherwise, partition the current node of the octree further
     else
     {
@@ -333,7 +333,7 @@ void Octree::build_subtree(std::vector<oct_node> *curr, double max_prod,\
  * Each thread of execution will construct one subtree at a time for the global
  * octree representing all of the physical space we are interested in. Each
  * subtree will have its root at level min_depth of the global octree. All
- * 8^min_depth subtrees will be constructed as vectors stored in depth-first 
+ * 8^min_depth subtrees will be constructed as vectors stored in depth-first
  * order. These vectors will themselves be stored in an array. Thus, tree
  * traversal will have two steps: determining which subtree to start in, and
  * then traversing that subtree to reach the desired node.
@@ -372,7 +372,7 @@ void Octree::init_subtrees(int tid, double max_prod, double min_g)
  * value n dictates how many threads will be used to build the tree, i.e. 8^n
  * threads will be used. The tree itself is stored as an array of vectors, where
  * each vector stores a subtree whose root has a granularity just under max_g.
- * 
+ *
  * Though complex, there are good reasons for such a data structure. First, the
  * array of trees structure allows us to add a hashing behavior to the tree to
  * reduce the overall number of memory accesses entailed in tree iteration.
@@ -409,7 +409,7 @@ Octree::Octree(double max_prod, double max_g, double min_g, XORShift<> &gen,\
         threads.emplace_back(&Octree::init_subtrees, this, i, max_prod, min_g);
     for (auto &t : threads)
         t.join();
-    
+
     // Add up the number of nodes in the tree as a whole
     uint64_t num_nodes = 0;
     uint64_t occ = 0;
@@ -424,7 +424,7 @@ Octree::Octree(double max_prod, double max_g, double min_g, XORShift<> &gen,\
     double max = 0;
     for (int i = min_depth; i <= max_depth; i++) max += pow(8, i);
     std::cout << "The tree has " << (double)num_nodes << " nodes, or ";
-    std::cout << (double)num_nodes/max*100  << "% of " << (double)max << " "; 
+    std::cout << (double)num_nodes/max*100  << "% of " << (double)max << " ";
     std::cout << "possible." << std::endl << "In total, " << occ << " nodes, ";
     std::cout << "or " << (double)occ/num_nodes*100 << "% of all the nodes in ";
     std::cout << "the tree hold MNPs." << std::endl << std::endl;
