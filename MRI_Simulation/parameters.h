@@ -4,7 +4,7 @@
  * @file    parameters.h
  * @brief   A file containing static const instantiations of all the paramaters
  *          that affect the way the simulation is conducted.
- */ 
+ */
 
 #ifndef PARAMETERS_H
 #define PARAMETERS_H
@@ -23,7 +23,7 @@ const int num_runs = 5;     // number of times to run T2 simulation
 
 /* Switches for enabling or disabling debugging output files */
 #undef DEBUG_DIFF           // create output file w/ RMS displacements?
-#undef DEBUG_MNPS           // create output file w/ all MNP coordinates?
+#define DEBUG_MNPS          // create output file w/ all MNP coordinates?
 #undef DEBUG_TREE           // check water/node residency via assertions?
 #undef DEBUG_FIELD          // create output file w/ B_z at all leaf nodes?
 #undef TIMED_OUTPUT         // print out a progress report every 1ms?
@@ -31,15 +31,28 @@ const int num_runs = 5;     // number of times to run T2 simulation
 /* Molecule and nanoparticle info */
 const int num_water = 500;              // number of waters in simulation
 const double mnp_radius = .1;           // radius of one nanoparticle (um)
-#define EXTRACELLULAR                    // MNPs intracellular or extracellular?
-#ifdef EXTRACELLULAR
-const int num_mnps = 1.760e3;           // number of MNPs (if all extracellular)
+
+// Exactly ONE of the three flags below must be defined.
+#define EXTRACELLULAR                   // MNPs intracellular, extracellular,
+#undef INTRACELULAR                     // or both?
+#undef INTRA_EXTRA
+
+#define UNCLUSTERED                     // MNPs clustered or unclustered?
+
+#ifdef UNCLUSTERED
+const int num_mnps = 1.760e3;           // number of unclustered MNPs
 const double mmoment = 2e-15;           // magnetic moment of each MNP
 const double scale = raw_scale;         // to account for smaller MNPs
 #else
 const double mnp_pack = 3;              // influences MNP cluster packing
 const double scale = raw_scale;         // to account for larger MNPs
 #endif
+
+#define LIPID_ENVELOPE                  // Lipid envelope around intracellular
+                                        // MNPs?
+
+const double lipid_width = 0.002;       // To account for the lipid bilayer
+                                        // enveloping intracellular MNP's
 
 /* Characteristics of FCC cell lattice */
 const double cell_r = 9;                // cell radius in microns

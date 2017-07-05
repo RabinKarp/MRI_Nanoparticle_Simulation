@@ -97,9 +97,9 @@ void thread_func(const int tid, Octree *tree, water_info *molec, FCC *lattice)
             disp[tid][3*i/dfreq+2] += sum_z / num_water / num_runs;
         }
 #endif /* DEBUG_DIFF */
-        
+
 #ifdef TIMED_OUTPUT
-        // print out a progress report every million time-steps 
+        // print out a progress report every million time-steps
         if (i % 1000000 == 0)
         {
             double now = (double)(i) * tau;
@@ -109,7 +109,7 @@ void thread_func(const int tid, Octree *tree, water_info *molec, FCC *lattice)
             lock.unlock();
         }
 #endif /* TIMED_OUTPUT */
-        
+
         // apply spin echo and flip phases every odd Carr-Purcell time
         if (i % (2*tcp) == tcp)
         {
@@ -151,7 +151,7 @@ std::string generate_base_filename()
     filename += "ms_pct-labeled=";
     filename += std::to_string((unsigned)(100*prob_labeled));
 
-#ifdef EXTRACELLULAR
+#ifdef UNCLUSTERED
     filename += "_unclustered";
 #else
     filename += "_clustered";
@@ -241,12 +241,12 @@ int main(void)
             init_pos[3*j+2] = w[j].z;
         }
     #endif /* DEBUG_DIFF */
-        
+
         // Simulate T2 relaxation using the number of threads specified
         start = time(NULL);
         std::vector<std::thread> thds;
         for (int j = 0; j < num_threads; j++)
-            thds.emplace_back(thread_func, j, tree, w, lattice); 
+            thds.emplace_back(thread_func, j, tree, w, lattice);
         for (auto &t : thds)
             t.join();
         elapsed = time(NULL) - start;
@@ -310,7 +310,7 @@ int main(void)
 
 #ifdef DEBUG_DIFF
     /* If debugging diffusion, output a file containing the absolute values of
-     * the mean of the absolute values of the displacements of all molecules in 
+     * the mean of the absolute values of the displacements of all molecules in
      * the x, y, and z directions. */
     std::ofstream out_file;
     out_file.open("T2_sim_diffusion_stats.csv");
