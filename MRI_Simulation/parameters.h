@@ -52,7 +52,7 @@ const double scale = raw_scale;         // to account for larger MNPs
                                         // MNPs?
 
 const double lipid_width = 0.002;       // To account for the lipid bilayer
-                                        // enveloping intracellular MNP's
+                                        // enveloping intracellular MNP's (um)
 
 /* Characteristics of FCC cell lattice */
 const double cell_r = 9;                // cell radius in microns

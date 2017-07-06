@@ -102,6 +102,8 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
     for (int i = 0; i < num_mnps; i++)
     {
         double x, y, z;
+        double r = mnp_radius;
+        bool contained;
         bool invalid = true;
 
         // keep generating (x,y,z) coordinates until we get an extracellular one
@@ -112,6 +114,7 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
             y = gen.rand_pos_double() * bound;
             z = gen.rand_pos_double() * bound;
             invalid = false;
+            contained = false;
 
             // Check for cell overlap and cell containment
             for (int j = 0; j < num_cells && !invalid; j++)
@@ -125,23 +128,23 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
 #ifdef EXTRACELLULAR
                 if (sqDist < pow(cell_r + mnp_radius, 2))
                     invalid = true;
-            }
 #endif
 #ifdef INTRACELLULAR
+                contained = true;
                 if (sqDist > pow(max(0, cell_r - mnp_radius), 2))
                     invalid = true;
-            }
 #endif
-
-// In this case, only check for overlap with the cell boundary, we don't care
-// where else the MNP is
+// In this case, check for cell boundary overlap and test for containment in
+// any cell.
 #ifdef INTRA_EXTRA
-                if (sqDist < pow(cell_r + mnp_radius, 2) &&
-                   sqDist > pow(max(0, cell_r - mnp_radius), 2))
+                if (sqDist < pow(cell_r + mnp_radius, 2)) {
+                  contained = true;
+                  if(sqDist > pow(max(0, cell_r - mnp_radius), 2)) {
                     invalid = true;
-            }
+                  }
+                }
 #endif
-
+            }
             // re-throw if the nanoparticle overlaps with another nanoparticle
             std::vector<MNP_info>::iterator curr;
             for (curr = mnps->begin(); curr != mnps->end() && !invalid; curr++)
@@ -150,10 +153,17 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
                 double dy = y - curr->y;
                 double dz = z - curr->z;
                 if (NORMSQ(dx, dy, dz) < pow(2*mnp_radius, 2))
-                    invalid = true;
+                  invalid = true;
             }
         }
-        mnps->emplace_back(x, y, z, mnp_radius, mmoment);
+
+// Add in the thickness of the lipid layer surrounding intracellular MNP's
+// taken up by endocytosis
+#ifdef LIPID_ENVELOPE
+        if(contained)
+          r += lipid_width;
+#endif
+        mnps->emplace_back(x, y, z, r, mmoment);
     }
 
 #ifdef DEBUG_MNPS
@@ -214,6 +224,7 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
                 {
                     double M = cells[j][k];
                     double r = pow(mnp_pack*M/(1.6e-15), 1.0/3.0) * mnp_radius;
+
                     double x, y, z;
 
                     /* Keep re-generating the center for the MNP in question
