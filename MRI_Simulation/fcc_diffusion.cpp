@@ -88,6 +88,26 @@ water_info *FCC::init_molecules(double L, int n, std::vector<MNP_info> *mnps,\
 }
 
 /**
+ * Helper function that checs if a sphere with specified x, y, and z
+ * coordinates and specified radius overlaps with any of the nanoparticles
+ * in a given vector. The target MNP
+ */
+inline bool FCC::checkOverlap(std::vector<MNP_info> *mnps,
+  double x, double y, double z, double r) {
+    bool overlaps = false;
+    std::vector<MNP_info>::iterator curr;
+    for (curr = mnps->begin(); curr != mnps->end() && !overlaps; curr++)
+    {
+        double dx = x - curr->x;
+        double dy = y - curr->y;
+        double dz = z - curr->z;
+        if (NORMSQ(dx, dy, dz) < pow(r + curr->r, 2))
+          overlaps = true;
+    }
+    return overlaps;
+}
+
+/**
  * Handle the case of unclustered MNP's in extracellular or intracellular
  * space, or both
  */
@@ -116,7 +136,7 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
             invalid = false;
             contained = false;
 
-            // Check for cell overlap and cell containment
+            // Check for cell containment and cell boundary overlap
             for (int j = 0; j < num_cells && !invalid; j++)
             {
                 double dx = x - fcc[j][0];
@@ -134,6 +154,7 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
                 if (sqDist > pow(max(0, cell_r - mnp_radius), 2))
                     invalid = true;
 #endif
+
 // In this case, check for cell boundary overlap and test for containment in
 // any cell.
 #ifdef INTRA_EXTRA
@@ -146,19 +167,11 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
 #endif
             }
             // re-throw if the nanoparticle overlaps with another nanoparticle
-            std::vector<MNP_info>::iterator curr;
-            for (curr = mnps->begin(); curr != mnps->end() && !invalid; curr++)
-            {
-                double dx = x - curr->x;
-                double dy = y - curr->y;
-                double dz = z - curr->z;
-                if (NORMSQ(dx, dy, dz) < pow(2*mnp_radius, 2))
-                  invalid = true;
-            }
+            if(checkOverlap(mnps, x, y, z, r))
+              invalid = true;
         }
 
 // Add in the thickness of the lipid layer surrounding intracellular MNP's
-// taken up by endocytosis
 #ifdef LIPID_ENVELOPE
         if(contained)
           r += lipid_width;
@@ -208,6 +221,9 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
     //cells[6] = {0.3356e-11/3.33, 0.0617e-11/3.33, 0.1249e-11/3.33, 0.0197e-11/3.33};
     std::vector<MNP_info> *mnps = new std::vector<MNP_info>;
 
+// Assign MNPs to cells based on the cell library
+#ifdef INTRACELLULAR
+
     std::uniform_real_distribution<> dist(1 - (1/prob_labeled), 1);
     for (int i = 0; i < num_cells; i++)
     {
@@ -225,6 +241,10 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
                     double M = cells[j][k];
                     double r = pow(mnp_pack*M/(1.6e-15), 1.0/3.0) * mnp_radius;
 
+#ifdef LIPID_ENVELOPE
+                    r += lipid_width;
+#endif
+
                     double x, y, z;
 
                     /* Keep re-generating the center for the MNP in question
@@ -233,22 +253,15 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
                     bool invalid = true;
                     while (invalid)
                     {
+                        invalid = false;
                         double norm = gen.rand_pos_double() * cell_r;
                         water_info loc = rand_displacement(norm, gen);
                         x = loc.x + fcc[i][0];
                         y = loc.y + fcc[i][1];
                         z = loc.z + fcc[i][2];
 
-                        std::vector<MNP_info>::iterator m, start = mnps->begin();
-                        invalid = false;
-                        for (m = start; m != mnps->end() && !invalid; m++)
-                        {
-                            double dx = x - m->x;
-                            double dy = y - m->y;
-                            double dz = z - m->z;
-                            if (NORMSQ(dx, dy, dz) < pow(r + m->r, 2))
-                                invalid = true;
-                        }
+                        if(checkOverlap(mnps, x, y, z, r))
+                          invalid = true;
                     }
 
                     /* Only actually place MNP in lattice if its center is
@@ -262,6 +275,60 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
             }
         }
     }
+#endif /* INTRACELLULAR */
+
+/*
+ * Throw extracellular clustered MNPs by randomly throwing clusters with
+ * different magnetic moments and diffusion boundary radii. In this
+ * implementation, each cluster has an equal chance of being thrown.
+ */
+#ifdef EXTRACELLULAR
+  int numMoments = 21;
+  double momentList[] = {
+    5.35e-14/3.33, 1.688e-13/3.33, 1.72e-13/3.33,
+    8.50e-13/3.33, 1.200e-12/3.33, 2.6e-14/3.33,
+    1.7e-14/3.33, 1.7e-14/3.33, 7e-15/3.33,
+    1.9e-14/3.33, 1.76e-14/3.33, 2.3e-15/3.33,
+    1.5e-15/3.33, 1.531e-13/3.33, 1.126e-15*3.33,
+    4.68e-16*3.33, 2.129e-15*3.33, 3.653e-15*3.33,
+    2.096e-15*3.33,1.68e-15*3.33, 2.3e-16*3.33
+  };
+  std::uniform_real_distribution<> dist(0, 21);
+
+  for(int i = 0; i < num_mnps; i++) {
+
+    int coin = (int) dist(gen);
+    double M = momentList[coin];
+    double r = pow(mnp_pack*M/(1.6e-15), 1.0/3.0) * mnp_radius;
+    bool invalid = false;
+
+    while(invalid) {
+      x = gen.rand_pos_double() * bound;
+      y = gen.rand_pos_double() * bound;
+      z = gen.rand_pos_double() * bound;
+
+      // Check against cell containment
+      for (int j = 0; j < num_cells && !invalid; j++)
+      {
+          double dx = x - fcc[j][0];
+          double dy = y - fcc[j][1];
+          double dz = z - fcc[j][2];
+
+          double sqDist = NORMSQ(dx, dy, dz);
+
+          if (sqDist < pow(cell_r + r, 2))
+              invalid = true;
+      }
+
+      // Check MNP overlap
+      if(checkOverlap(mnps, x, y, z, r))
+          invalid = true;
+    }
+    mnps->emplace_back(x, y, z, r, mmoment);
+  }
+
+#endif
+
 #ifdef DEBUG_MNPS
     std::ofstream out_file;
     out_file.open("T2_sim_MNPs_clustered.csv");
@@ -279,7 +346,7 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
     apply_bcs_on_mnps(mnps);
     return mnps;
 }
-#endif /* EXTRACELLULAR */
+#endif /* CLUSTERED */
 
 /*
  * Prints out the number of nanoparticles in the lattice, the volume fraction of
@@ -294,7 +361,7 @@ void FCC::print_mnp_stats(std::vector<MNP_info> *mnps)
         sum_V += 4.0f/3.0f * pi * pow(np->r, 3);
         sum_r += np->r;
     }
-#ifndef EXTRACELLULAR
+#ifndef UNCLUSTERED
     sum_V /= mnp_pack;
 #endif
     unsigned num_mnp = mnps->size();

@@ -40,13 +40,15 @@ const double mnp_radius = .1;           // radius of one nanoparticle (um)
 #define UNCLUSTERED                     // MNPs clustered or unclustered?
 
 #ifdef UNCLUSTERED
-const int num_mnps = 1.760e3;           // number of unclustered MNPs
 const double mmoment = 2e-15;           // magnetic moment of each MNP
 const double scale = raw_scale;         // to account for smaller MNPs
 #else
 const double mnp_pack = 3;              // influences MNP cluster packing
 const double scale = raw_scale;         // to account for larger MNPs
 #endif
+
+const int num_mnps = 1.760e3;           // number of unclustered MNPs
+                                        // OR the number of extracellular clustered MNP's
 
 #define LIPID_ENVELOPE                  // Lipid envelope around intracellular
                                         // MNPs?
