@@ -301,13 +301,14 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
   std::uniform_real_distribution<> dist(0, 21);
 
   for(int i = 0; i < num_mnps; i++) {
-
+    double x, y, z;
     int coin = (int) dist(gen);
     double M = momentList[coin];
     double r = pow(mnp_pack*M/(1.6e-15), 1.0/3.0) * mnp_radius;
-    bool invalid = false;
+    bool invalid = true;
 
     while(invalid) {
+      invalid = false;
       x = gen.rand_pos_double() * bound;
       y = gen.rand_pos_double() * bound;
       z = gen.rand_pos_double() * bound;
@@ -329,7 +330,7 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
       if(checkOverlap(mnps, x, y, z, r))
           invalid = true;
     }
-    mnps->emplace_back(x, y, z, r, mmoment);
+    mnps->emplace_back(x, y, z, r, M);
   }
 
 #endif
