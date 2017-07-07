@@ -35,11 +35,11 @@ const int num_water = 2000;             // number of waters in simulation
 const double mnp_radius = .1;           // radius of one nanoparticle (um)
 
 // Exactly ONE of the three flags below must be defined.
-#undef EXTRACELLULAR                   // MNPs intracellular, extracellular,
+#define EXTRACELLULAR                   // MNPs intracellular, extracellular,
 #undef INTRACELLULAR                  // or both?
-#define INTRA_EXTRA
+#undef INTRA_EXTRA
 
-#define UNCLUSTERED                     // MNPs clustered or unclustered?
+#define CLUSTERED                     // MNPs clustered or unclustered?
 
 #ifdef UNCLUSTERED
 const double mmoment = 2.0e-15;         // magnetic moment of each MNP
