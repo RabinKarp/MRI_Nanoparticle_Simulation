@@ -123,7 +123,8 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
     {
         double x, y, z;
         double r = mnp_radius;
-        bool contained;
+        bool contained = false;
+        bool overlaps = false;
         bool invalid = true;
 
         // keep generating (x,y,z) coordinates until we get an extracellular one
@@ -135,6 +136,7 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
             z = gen.rand_pos_double() * bound;
             invalid = false;
             contained = false;
+            overlaps = false;
 
             // Check for cell containment and cell boundary overlap
             for (int j = 0; j < num_cells && !invalid; j++)
@@ -145,27 +147,30 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
 
                 double sqDist = NORMSQ(dx, dy, dz);
 
+                if (sqDist < pow(cell_r + mnp_radius, 2)) {
+                  if(sqDist > pow(std::max(0.0, cell_r - mnp_radius), 2)) {
+                    overlaps = true;
+                  }
+                  else {
+                    contained = true;
+                  }
+                }
+            }
 #ifdef EXTRACELLULAR
-                if (sqDist < pow(cell_r + mnp_radius, 2))
-                    invalid = true;
+            if(contained || overlaps)
+              invalid = true;
 #endif
 #ifdef INTRACELLULAR
-                contained = true;
-                if (sqDist > pow(max(0, cell_r - mnp_radius), 2))
-                    invalid = true;
+            if(! contained || overlaps)
+              invalid = true;
 #endif
 
 // In this case, check for cell boundary overlap and test for containment in
 // any cell.
 #ifdef INTRA_EXTRA
-                if (sqDist < pow(cell_r + mnp_radius, 2)) {
-                  contained = true;
-                  if(sqDist > pow(max(0, cell_r - mnp_radius), 2)) {
-                    invalid = true;
-                  }
-                }
+            if(overlaps)
+              invalid = true;
 #endif
-            }
             // re-throw if the nanoparticle overlaps with another nanoparticle
             if(checkOverlap(mnps, x, y, z, r))
               invalid = true;
