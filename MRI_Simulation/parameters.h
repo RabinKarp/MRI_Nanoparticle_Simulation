@@ -9,6 +9,8 @@
 #ifndef PARAMETERS_H
 #define PARAMETERS_H
 
+#include <cmath>
+
 /* Parameters affecting nanoparticle residency in nodes */
 #undef FULL_BOUNDARIES      // use full boundary conditions to calculate field?
 const double raw_scale = 7; // calculate B explicitly within scale*R of cluster
@@ -29,18 +31,18 @@ const int num_runs = 5;     // number of times to run T2 simulation
 #undef TIMED_OUTPUT         // print out a progress report every 1ms?
 
 /* Molecule and nanoparticle info */
-const int num_water = 500;              // number of waters in simulation
+const int num_water = 2000;             // number of waters in simulation
 const double mnp_radius = .1;           // radius of one nanoparticle (um)
 
 // Exactly ONE of the three flags below must be defined.
-#define EXTRACELLULAR                   // MNPs intracellular, extracellular,
-#undef INTRACELULAR                     // or both?
-#undef INTRA_EXTRA
+#undef EXTRACELLULAR                   // MNPs intracellular, extracellular,
+#undef INTRACELLULAR                  // or both?
+#define INTRA_EXTRA
 
 #define UNCLUSTERED                     // MNPs clustered or unclustered?
 
 #ifdef UNCLUSTERED
-const double mmoment = 2e-15;           // magnetic moment of each MNP
+const double mmoment = 2.0e-15;         // magnetic moment of each MNP
 const double scale = raw_scale;         // to account for smaller MNPs
 #else
 const double mnp_pack = 3;              // influences MNP cluster packing
