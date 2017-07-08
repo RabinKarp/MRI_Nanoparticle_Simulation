@@ -92,7 +92,7 @@ water_info *FCC::init_molecules(double L, int n, std::vector<MNP_info> *mnps,\
  * coordinates and specified radius overlaps with any of the nanoparticles
  * in a given vector. The target MNP
  */
-inline bool FCC::checkOverlap(std::vector<MNP_info> *mnps,
+inline bool FCC::checkMNPOverlap(std::vector<MNP_info> *mnps,
   double x, double y, double z, double r) {
     bool overlaps = false;
     std::vector<MNP_info>::iterator curr;
@@ -105,6 +105,47 @@ inline bool FCC::checkOverlap(std::vector<MNP_info> *mnps,
           overlaps = true;
     }
     return overlaps;
+}
+
+/**
+ * Helper function that checks if the sphere with the given (x, y, z)
+ * coordinates and radius OVERLAPS with the boundary of any sphere in
+ * the FCC lattice.
+ */
+inline bool FCC::checkLatticeOverlap(double x, double y, double z, double r) {
+    bool overlaps = false;
+    for(int i = 0; i < 172; i++) {
+        double dx = x - fcc[i][0];
+        double dy = y - fcc[i][1];
+        double dz = z - fcc[i][2];
+
+        double sqDist = NORMSQ(dx, dy, dz);
+
+        if (sqDist < pow(cell_r + r, 2)
+            && sqDist > pow(std::max(0.0, cell_r - r)) {
+            overlaps = true;
+        }
+    }
+    return overlaps;
+}
+
+/**
+ * Helper function that checks if the given (x, y, z) coordinate is
+ * contained in any cell of the FCC lattice. Returns the index of the lattice
+ * cell that contains the given point, or -1 if no cell contains that point.
+ */
+inline int FCC::checkLatticeContainment(double x, double y, double z) {
+    int containCell = -1;
+    for(int i = 0; i < 172; i++) {
+      double dx = x - fcc[i][0];
+      double dy = y - fcc[i][1];
+      double dz = z - fcc[i][2];
+
+      if(NORMSQ(dx, dy, dz) < cell_r) {
+        containCell = i;
+      }
+    }
+    return containCell;
 }
 
 /**
@@ -172,7 +213,7 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
               invalid = true;
 #endif
             // re-throw if the nanoparticle overlaps with another nanoparticle
-            if(checkOverlap(mnps, x, y, z, r))
+            if(checkMNPOverlap(mnps, x, y, z, r))
               invalid = true;
         }
 
@@ -259,13 +300,24 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
                     while (invalid)
                     {
                         invalid = false;
-                        double norm = gen.rand_pos_double() * cell_r;
+                        double norm;
+
+#ifdef INTRACELLULAR
+                        norm = gen.rand_pos_double() * (cell_r - mnp_radius);
+#elif defined EXTRACELLULAR
+                        norm = cell_r + gen.rand_pos_double()
+                            * (u_throw_coeff - 1);
+#elif defined INTRA_EXTRA
+                        norm = gen.rand_pos_double() * u_throw_coeff;
+#endif
+
                         water_info loc = rand_displacement(norm, gen);
+
                         x = loc.x + fcc[i][0];
                         y = loc.y + fcc[i][1];
                         z = loc.z + fcc[i][2];
 
-                        if(checkOverlap(mnps, x, y, z, r))
+                        if(checkMNPOverlap(mnps, x, y, z, r))
                           invalid = true;
                     }
 
@@ -280,59 +332,6 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
             }
         }
     }
-#endif /* INTRACELLULAR */
-
-/*
- * Throw extracellular clustered MNPs by randomly throwing clusters with
- * different magnetic moments and diffusion boundary radii. In this
- * implementation, each cluster has an equal chance of being thrown.
- */
-#ifdef EXTRACELLULAR
-  int numMoments = 21;
-  double momentList[] = {
-    5.35e-14/3.33, 1.688e-13/3.33, 1.72e-13/3.33,
-    8.50e-13/3.33, 1.200e-12/3.33, 2.6e-14/3.33,
-    1.7e-14/3.33, 1.7e-14/3.33, 7e-15/3.33,
-    1.9e-14/3.33, 1.76e-14/3.33, 2.3e-15/3.33,
-    1.5e-15/3.33, 1.531e-13/3.33, 1.126e-15*3.33,
-    4.68e-16*3.33, 2.129e-15*3.33, 3.653e-15*3.33,
-    2.096e-15*3.33,1.68e-15*3.33, 2.3e-16*3.33
-  };
-  std::uniform_real_distribution<> dist(0, 21);
-
-  for(int i = 0; i < num_mnps; i++) {
-    double x, y, z;
-    int coin = (int) dist(gen);
-    double M = momentList[coin];
-    double r = pow(mnp_pack*M/(1.6e-15), 1.0/3.0) * mnp_radius;
-    bool invalid = true;
-
-    while(invalid) {
-      invalid = false;
-      x = gen.rand_pos_double() * bound;
-      y = gen.rand_pos_double() * bound;
-      z = gen.rand_pos_double() * bound;
-
-      // Check against cell containment
-      for (int j = 0; j < num_cells && !invalid; j++)
-      {
-          double dx = x - fcc[j][0];
-          double dy = y - fcc[j][1];
-          double dz = z - fcc[j][2];
-
-          double sqDist = NORMSQ(dx, dy, dz);
-
-          if (sqDist < pow(cell_r + r, 2))
-              invalid = true;
-      }
-
-      // Check MNP overlap
-      if(checkOverlap(mnps, x, y, z, r))
-          invalid = true;
-    }
-    mnps->emplace_back(x, y, z, r, M);
-  }
-
 #endif
 
 #ifdef DEBUG_MNPS

@@ -36,15 +36,18 @@ const double mnp_radius = .1;           // radius of one nanoparticle (um)
 
 // Exactly ONE of the three flags below must be defined.
 #define EXTRACELLULAR                   // MNPs intracellular, extracellular,
-#undef INTRACELLULAR                  // or both?
+#undef INTRACELLULAR                    // or both?
 #undef INTRA_EXTRA
 
-#define CLUSTERED                     // MNPs clustered or unclustered?
+#define CLUSTERED                      // MNPs clustered or unclustered?
+#undef UNCLUSTERED
+
+const double u_throw_coeff = 1.1;      // Clustered extracell. rad coefficient
 
 #ifdef UNCLUSTERED
 const double mmoment = 2.0e-15;         // magnetic moment of each MNP
 const double scale = raw_scale;         // to account for smaller MNPs
-#else
+#elif defined CLUSTERED
 const double mnp_pack = 3;              // influences MNP cluster packing
 const double scale = raw_scale;         // to account for larger MNPs
 #endif
