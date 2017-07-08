@@ -47,8 +47,11 @@ class FCC
     void print_mnp_stats(std::vector<MNP_info> *mnps);
     void apply_bcs_on_mnps(std::vector<MNP_info> *mnps);
 
-    inline bool checkOverlap(std::vector<MNP_info> *mnps,
+    // Helper functions here
+    inline bool checkMNPOverlap(std::vector<MNP_info> *mnps,
       double x, double y, double z, double r);
+    inline bool checkLatticeOverlap(double x, double y, double z, double r);
+    inline int checkLatticeContainment(double x, double y, double z);
 
     /*
      * Instance variable representing the centers of all the cells in an FCC
