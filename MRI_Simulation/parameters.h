@@ -21,28 +21,29 @@ const double border = 6;    // boundary from box where we start applying BC's
 /* Parameters affecting the T2 simulation */
 #undef EXPLICIT             // calculate B field explicitly?
 const int num_threads = 8;  // number of threads to run T2 simulation on
-const int num_runs = 5;     // number of times to run T2 simulation
+const int num_runs = 1;     // number of times to run T2 simulation
 
 /* Switches for enabling or disabling debugging output files */
 #undef DEBUG_DIFF           // create output file w/ RMS displacements?
-#define DEBUG_MNPS          // create output file w/ all MNP coordinates?
+#undef DEBUG_MNPS          // create output file w/ all MNP coordinates?
 #undef DEBUG_TREE           // check water/node residency via assertions?
 #undef DEBUG_FIELD          // create output file w/ B_z at all leaf nodes?
 #undef TIMED_OUTPUT         // print out a progress report every 1ms?
 
 /* Molecule and nanoparticle info */
-const int num_water = 2000;             // number of waters in simulation
+const int num_water = 100;              // number of waters in simulation
 const double mnp_radius = .1;           // radius of one nanoparticle (um)
 
 // Exactly ONE of the three flags below must be defined.
-#define EXTRACELLULAR                   // MNPs intracellular, extracellular,
-#undef INTRACELLULAR                    // or both?
-#undef INTRA_EXTRA
+#undef EXTRACELLULAR                   // MNPs intracellular, extracellular,
+#undef INTRACELLULAR                   // or both?
+#define INTRA_EXTRA
 
 #define CLUSTERED                      // MNPs clustered or unclustered?
 #undef UNCLUSTERED
 
-const double u_throw_coeff = 1.1;      // Clustered extracell. rad coefficient
+#define LIPID_ENVELOPE                  // Lipid envelope around intracellular
+                                        // MNPs
 
 #ifdef UNCLUSTERED
 const double mmoment = 2.0e-15;         // magnetic moment of each MNP
@@ -50,13 +51,14 @@ const double scale = raw_scale;         // to account for smaller MNPs
 #elif defined CLUSTERED
 const double mnp_pack = 3;              // influences MNP cluster packing
 const double scale = raw_scale;         // to account for larger MNPs
+
+const double u_throw_coeff = 1.1;       // Clustered extracell. rad coefficient
+const double ie_ratio = 0.5;            // When INTRA_EXTRA is set, the ratio
+                                        // of intracellular to extracellular MNPs
 #endif
 
 const int num_mnps = 1.760e3;           // number of unclustered MNPs
                                         // OR the number of extracellular clustered MNP's
-
-#define LIPID_ENVELOPE                  // Lipid envelope around intracellular
-                                        // MNPs?
 
 const double lipid_width = 0.002;       // To account for the lipid bilayer
                                         // enveloping intracellular MNP's (um)
