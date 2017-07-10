@@ -161,6 +161,14 @@ std::string generate_base_filename()
     if (fcc_pack > 1.01)
         filename += "_loose-cells";
 
+#ifdef EXTRACELLULAR
+    filename += "_extracellular";
+#elif defined INTRACELLULAR
+    filename += "_intracellular";
+#elif defined INTRA_EXTRA
+    filename += "_intra_extra";
+#endif
+
 #ifdef EXPLICIT
     filename += "_ex_";
 #endif
