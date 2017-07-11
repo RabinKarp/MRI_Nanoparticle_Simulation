@@ -234,6 +234,7 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
  */
 std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
 {
+    int numContained = 0;
     /* Magnetic moments established by HD on NV adjusted using SQUID magneto-
      * metry for saturation magnetization. Each Cell is an array of the magnetic
      * moments of the enclosed nanoparticles.*/
@@ -251,7 +252,6 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
 // Assign MNPs to cells based on the cell library
 
     std::uniform_real_distribution<> dist(1 - (1/prob_labeled), 1);
-    std::uniform_real_distribution<> ie_dist(0, 1);
     for (int i = 0; i < num_cells; i++)
     {
         double coin = dist(gen);
@@ -272,7 +272,7 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
 
                     /* Keep re-generating the center for the MNP in question
                      * until the MNP does not overlap with any other MNPs that
-                     * have already been initialized */
+                     * have already been initialized. */
                     bool invalid = true;
                     while (invalid)
                     {
@@ -285,14 +285,7 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
                         norm = cell_r * (1 + gen.rand_pos_double()
                             * (u_throw_coeff - 1));
 #elif defined INTRA_EXTRA
-                        double ie_coin = ie_dist(gen);
-                        if(ie_coin < ie_ratio) {
-                            norm = gen.rand_pos_double() * (cell_r - mnp_radius);
-                        }
-                        else {
-                            norm = cell_r * (1 + gen.rand_pos_double()
-                                * (u_throw_coeff - 1));
-                        }
+                        norm = gen.rand_pos_double() * cell_r * u_throw_coeff;
 #endif
                         water_info loc = rand_displacement(norm, gen);
 
@@ -307,12 +300,14 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
                         }
 
                         // Check if the MNP is contained by any cell
-                        // other than the cell around which it is thrown.
+                        // other than the cell around which it is thrown -
+                        // If so, re-throw.
                         containingCell = checkLatticeContainment(x, y, z);
                         if(containingCell != -1 && containingCell != i) {
                             invalid = true;
                         }
 
+                        // Check for overlap with other MNPs, re-throw if so
                         if(checkMNPOverlap(mnps, x, y, z, r))
                             invalid = true;
                     } /* while(invalid) */
@@ -327,8 +322,16 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
                      * inside the defined space (so we don't artificially
                      * increase MNP density via periodic boundary conditions) */
                     if (x  < bound && x > 0 && y < bound && y > 0 &&
-                        z < bound && z > 0)
+                        z < bound && z > 0) {
                         mnps->emplace_back(x, y, z, r, M);
+
+                        // For debugging purposes, count the # of MNPs in
+                        // intracellular space
+#ifdef DEBUG_MNPS
+                        if(containingCell != -1)
+                            numContained++;
+#endif
+                    }
                 }
                 break; // cell occupied -- don't try to fill it w/ more MNPs
             }
@@ -337,6 +340,7 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
 
 #ifdef DEBUG_MNPS
     std::ofstream out_file;
+    std::cout << "Number of Intracellular MNPs: " << numContained << std::endl;
     out_file.open("T2_sim_MNPs_clustered.csv");
     out_file << "x,y,z,r,M" << std::endl;
     std::vector<MNP_info>::iterator i;
