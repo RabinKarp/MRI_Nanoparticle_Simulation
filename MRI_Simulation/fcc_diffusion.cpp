@@ -1,6 +1,7 @@
 /*
  * @author  Aadyot Bhatnagar
- * @date    August 12, 2016
+ * @author  Vivek Bharadwaj
+ * @date    July 11, 2017
  * @file    fcc_diffusion.cpp
  * @brief   Implementation details for a class that represents a 3x3x3 face-
  *          centered cubic lattice of cells with periodic boundary conditions.
@@ -10,11 +11,86 @@
 
 #include <cmath>
 #include <iostream>
+#include <fstream>
 #include "parameters.h"
 #include "fcc_diffusion.h"
 #include "rand_walk.h"
 
 #define CELL_TYPES 6
+
+/**
+ * Computes the centers of all the cells in the FCC lattice and stores
+ * them in the FCC class's member array. Also computes the array of neighbors
+ * for each cell.
+ */
+void FCC::initLattice(int dim) {
+
+#ifdef DEBUG_LATTICE
+    std::ofstream f1("lattice.csv");
+    std::ofstream f2("neighbors.csv");
+#endif
+
+    int lw = 2 * dim + 1;
+    int x, y, z;
+    x = 0;
+    y = 0;
+    z = 0;
+    int sphereLookup[lw][lw][lw];
+
+    for(int i = 0; i < num_cells; i++) {
+        fcc[i][0] = x;
+        fcc[i][1] = y;
+        fcc[i][2] = z;
+        sphereLookup[x][y][z] = i;
+        x += 2;
+        if(x >= lw) {
+            x %= lw;
+            y += 1;
+            if(y >= lw) {
+                y = 0;
+                z += 1;
+            }
+        }
+    }
+
+    // Iterate through each cell and compute its neighbors
+    for(int i = 0; i < num_cells; i++) {
+        for(int j = 0; j < 12; j++) {
+            x = fcc[i][0] + nOffsets[j][0];
+            y = fcc[i][1] + nOffsets[j][1];
+            z = fcc[i][2] + nOffsets[j][2];
+
+            // At the edge of the lattice? Just put in another reference to
+            // the current cell, since the immediate neighbors are accounted
+            // for anyway
+
+            if(x < 0 || y < 0 || z < 0 || x >= lw || y >= lw || z >= lw)
+                neighbors[i][j] = i;
+            else
+                neighbors[i][j] = sphereLookup[x][y][z];
+
+#ifdef DEBUG_LATTICE
+            f2 << neighbors[i][j];
+            if(j != 11)
+                f2 << ",";
+#endif
+         }
+#ifdef DEBUG_LATTICE
+       f2 << std::endl;
+#endif
+    }
+    // Post-processing (for backwards-compatibility) subtract off the
+    // lattice dimension from each of the coordinates to center the lattice
+    // about the origin
+    for(int i = 0; i < num_cells; i++) {
+        fcc[i][0] -= dim;
+        fcc[i][1] -= dim;
+        fcc[i][2] -= dim;
+#ifdef DEBUG_LATTICE
+        f1 << fcc[i][0] << "," << fcc[i][1] << "," << fcc[i][2] << std::endl;
+#endif
+    }
+}
 
 /*
  * Uses cell radius to scale coordinates of cell centers in FCC lattice and
@@ -25,7 +101,8 @@
  */
 FCC::FCC(double D_in, double D_out, double P_expr)
 {
-    for (int i = 0; i < 172; i++)
+    initLattice(n);
+    for (int i = 0; i < num_cells; i++)
     {
         for (int j = 0; j < 3; j++)
         {
@@ -33,6 +110,7 @@ FCC::FCC(double D_in, double D_out, double P_expr)
             fcc[i][j] += bound/2;
         }
     }
+
     norm_in = std::normal_distribution<>(0, sqrt(pi * D_in * tau));
     norm_out = std::normal_distribution<>(0, sqrt(pi * D_out * tau));
     this->reflectIO = 1 - sqrt(tau / (6*D_in)) * 4 * P_expr;
@@ -114,7 +192,7 @@ inline bool FCC::checkMNPOverlap(std::vector<MNP_info> *mnps,
  */
 inline bool FCC::checkLatticeOverlap(double x, double y, double z, double r) {
     bool overlaps = false;
-    for(int i = 0; i < 172; i++) {
+    for(int i = 0; i < num_cells; i++) {
         double dx = x - fcc[i][0];
         double dy = y - fcc[i][1];
         double dz = z - fcc[i][2];
@@ -136,7 +214,7 @@ inline bool FCC::checkLatticeOverlap(double x, double y, double z, double r) {
  */
 inline int FCC::checkLatticeContainment(double x, double y, double z) {
     int containCell = -1;
-    for(int i = 0; i < 172; i++) {
+    for(int i = 0; i < num_cells; i++) {
       double dx = x - fcc[i][0];
       double dy = y - fcc[i][1];
       double dz = z - fcc[i][2];
@@ -406,7 +484,7 @@ void FCC::update_nearest_cell_full(water_info *w)
     double dz = z - center[2];
     double min_dist = NORMSQ(dx, dy, dz);
 
-    /* Check distance to/from all neighboring cells */
+    /* Check distance to/from ALL cells */
     for (int i = 1; i < num_cells; i++)
     {
         center = fcc[i];

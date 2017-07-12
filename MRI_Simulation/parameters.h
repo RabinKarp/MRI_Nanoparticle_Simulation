@@ -24,8 +24,9 @@ const int num_threads = 20; // number of threads to run T2 simulation on
 const int num_runs = 1;     // number of times to run T2 simulation
 
 /* Switches for enabling or disabling debugging output files */
+#undef DEBUG_LATTICE        // create output file w/ cell centers and neighbors?
 #undef DEBUG_DIFF           // create output file w/ RMS displacements?
-#define DEBUG_MNPS          // create output file w/ all MNP coordinates?
+#undef DEBUG_MNPS           // create output file w/ all MNP coordinates?
 #undef DEBUG_TREE           // check water/node residency via assertions?
 #undef DEBUG_FIELD          // create output file w/ B_z at all leaf nodes?
 #undef TIMED_OUTPUT         // print out a progress report every 1ms?
@@ -39,8 +40,8 @@ const double mnp_radius = (.1)/3;        // radius of one nanoparticle (um)
 #undef INTRACELLULAR                   // or both?
 #define INTRA_EXTRA
 
-#define CLUSTERED                      // MNPs clustered or unclustered?
-#undef UNCLUSTERED
+#undef CLUSTERED                      // MNPs clustered or unclustered?
+#define UNCLUSTERED
 
 #define LIPID_ENVELOPE                  // Lipid envelope around intracellular
                                         // MNPs
@@ -63,10 +64,11 @@ const double lipid_width = 0.002;       // To account for the lipid bilayer
                                         // enveloping intracellular MNP's (um)
 
 /* Characteristics of FCC cell lattice */
+const int n = 3;                        // The lattice is n x n x n
 const double cell_r = 6.8;              // cell radius in microns
 const double prob_labeled = 0.26;       // probability a given cell is labeled
 const double fcc_pack = 1.00;           // influences FCC packing efficiency
-const double bound = 6*sqrt(2)*cell_r*fcc_pack; // full box is [0, bound]^3
+const double bound = n * 2 *sqrt(2)*cell_r*fcc_pack; // full box is [0, bound]^3
 
 /* Constants affecting diffusion */
 const double D_cell = .5547;            // D in micron^2 per ms
