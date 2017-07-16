@@ -5,7 +5,7 @@
  * @brief   Header file outlining a class that represents a 3x3x3 face-centered
  *          cubic lattice of cells. This file contains most of the parameters
  *          that affect the diffusion behavior and specific calculations used
- *          in the T2 simulation. 
+ *          in the T2 simulation.
  */
 
 #ifndef FCC_DIFFUSION_H
@@ -30,7 +30,7 @@ const int num_neighbors = 12;       // number of neighbors each FCC cell has
 class FCC
 {
     public:
-    FCC(double D_in, double D_out, double P);    
+    FCC(double D_in, double D_out, double P);
     double diffusion_step(water_info *w, Octree *tree, XORShift<> &gen);
     std::vector<MNP_info> *init_mnps(XORShift<> &gen);
     water_info *init_molecules(double L, int n, std::vector<MNP_info> *mnps,\
@@ -43,6 +43,9 @@ class FCC
     double reflectIO, reflectOI;
     std::normal_distribution<> norm_in, norm_out;
 
+    bool checkLatticeOverlap(double x, double y, double z, double r);
+    int checkLatticeContainment(double x, double y, double z);
+    
     bool in_cell(water_info *w);
     bool boundary_conditions(water_info *w);
     void update_nearest_cell(water_info *w);
@@ -51,7 +54,7 @@ class FCC
 
     /*
      * Instance variable representing the centers of all the cells in an FCC
-     * lattice (unscaled). 
+     * lattice (unscaled).
      */
     double fcc[num_cells][3] = {{1,0,0},{0,1,0},{0,0,1},{-1,0,0},{0,-1,0},\
         {0,0,-1},{1,1,1},{1,1,-1},{1,-1,1},{1,-1,-1},{-1,1,1},{-1,1,-1},\

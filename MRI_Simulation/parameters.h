@@ -32,12 +32,25 @@ const int num_runs = 1;     // number of times to run T2 simulation
 /* Molecule and nanoparticle info */
 const int num_water = 2000;              // number of waters in simulation
 const double mnp_radius = .1;           // radius of one nanoparticle (um) (.1 NV)
+
+// Exactly ONE of the three flags below must be set
 #undef EXTRACELLULAR                    // MNPs intracellular or extracellular?
-#ifdef EXTRACELLULAR
+#define INTRACELLULAR
+#undef INTRA_EXTRA
+
+// Exactly ONE of the two flags below must be set
+#undef UNCLUSTERED
+#define CLUSTERED
+
+const double u_throw_coeff = 1.5;
+const double lipid_width = 0.002;      // Lipid bilayer width surrounding MNPs
+#define LIPID_ENVELOPE
+
+#ifdef UNCLUSTERED
 const int num_mnps = (1.760e3);           // number of MNPs (if all extracellular) (1.76e3 NV)
 const double mmoment = 1.7e-15;           // magnetic moment of each MNP (1.7e-15 NV)
 const double scale = raw_scale;         // to account for smaller MNPs
-#else
+#elif defined CLUSTERED
 const double mnp_pack = 3;              // influences MNP cluster packing
 const double scale = raw_scale;         // to account for larger MNPs
 #endif
