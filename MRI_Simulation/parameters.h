@@ -4,7 +4,7 @@
  * @file    parameters.h
  * @brief   A file containing static const instantiations of all the paramaters
  *          that affect the way the simulation is conducted.
- */ 
+ */
 
 #ifndef PARAMETERS_H
 #define PARAMETERS_H
@@ -23,10 +23,11 @@ const int num_runs = 1;     // number of times to run T2 simulation
 
 /* Switches for enabling or disabling debugging output files */
 #undef DEBUG_DIFF           // create output file w/ RMS displacements?
-#undef DEBUG_MNPS           // create output file w/ all MNP coordinates?
+#define DEBUG_MNPS           // create output file w/ all MNP coordinates?
 #undef DEBUG_TREE           // check water/node residency via assertions?
 #undef DEBUG_FIELD          // create output file w/ B_z at all leaf nodes?
-#undef TIMED_OUTPUT         // print out a progress report every 1ms?
+#define TIMED_OUTPUT         // print out a progress report every 1ms?
+
 
 /* Molecule and nanoparticle info */
 const int num_water = 2000;              // number of waters in simulation

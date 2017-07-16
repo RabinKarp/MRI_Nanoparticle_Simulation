@@ -48,7 +48,7 @@ water_info *FCC::init_molecules(double L, int n, std::vector<MNP_info> *mnps,\
 {
     water_info *molecules = new water_info[n];
     water_info *temp = molecules;
-    
+
     for (int i = 0; i < n; i++)
     {
         double x = gen.rand_pos_double() * L;
@@ -100,14 +100,14 @@ std::vector<MNP_info> *FCC::init_cluster(MNP_info &init, double r_pack,\
     cluster->push_back(init);
     double mmoment = init.M;
     double mnp_radius = init.r;
-    
+
     // add (num_mnp - 1) additional nanoparticles r_pack away from a random
     // nanoparticle that has already been initialized
     for (int i = 1; i < num_mnp; i++)
     {
         bool invalid = true;
         double x, y, z;
-        
+
         while (invalid)
         {
             // randomly select a nanoparticle for the next one to attach to, as
@@ -137,7 +137,7 @@ std::vector<MNP_info> *FCC::init_cluster(MNP_info &init, double r_pack,\
 
 #ifdef EXTRACELLULAR
 /*
- * Initializes the specified number of individaul, unclustered magnetic 
+ * Initializes the specified number of individaul, unclustered magnetic
  * nanoparticles all in extracellular space.
  */
 std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
@@ -156,6 +156,16 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
             y = gen.rand_pos_double() * bound;
             z = gen.rand_pos_double() * bound;
             invalid = false;
+
+            // re-throw if the nanoparticle is inside a cell
+            for (int j = 0; j < num_cells && !invalid; j++)
+            {
+                double dx = x - fcc[j][0];
+                double dy = y - fcc[j][1];
+                double dz = z - fcc[j][2];
+                if (NORMSQ(dx, dy, dz) < pow(cell_r + mnp_radius, 2))
+                    invalid = true;
+            }
 
             // re-throw if the nanoparticle overlaps with another nanoparticle
             std::vector<MNP_info>::iterator curr;
@@ -211,7 +221,7 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
     cells[5] = {2.096e-15*3.33,1.68e-15*3.33,2.3e-16*3.33};
     //cells[6] = {0.3356e-11/3.33, 0.0617e-11/3.33, 0.1249e-11/3.33, 0.0197e-11/3.33};
     std::vector<MNP_info> *mnps = new std::vector<MNP_info>;
-    
+
     std::uniform_real_distribution<> dist(1 - (1/prob_labeled), 1);
     for (int i = 0; i < num_cells; i++)
     {
@@ -234,9 +244,14 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
                      * until the MNP does not overlap with any other MNPs that
                      * have already been initialized. */
                     bool invalid = true;
-                    while (invalid) 
+                    while (invalid)
                     {
-                        double norm = gen.rand_pos_double() * cell_r;
+#ifdef INTRACELLULAR
+                        double norm = gen.rand_pos_double() * (cell_r);
+#elif defined EXTRACELLULAR
+                        double norm = gen.rand_pos_double()
+#elif defined INTRA_EXTRA
+#endif
                         water_info loc = rand_displacement(norm, gen);
                         x = loc.x + fcc[i][0];
                         y = loc.y + fcc[i][1];
@@ -331,7 +346,7 @@ void FCC::update_nearest_cell_full(water_info *w)
         center = fcc[i];
         dx = x - center[0];
         dy = y - center[1];
-        dz = z - center[2]; 
+        dz = z - center[2];
         double curr_dist = NORMSQ(dx, dy, dz);
         if (curr_dist < min_dist)
         {
@@ -348,7 +363,7 @@ void FCC::update_nearest_cell_full(water_info *w)
 }
 
 /*
- * For water molecules that have not crossed a boundary, this function updates 
+ * For water molecules that have not crossed a boundary, this function updates
  * the molecule's information about the cell it is closest to.
  */
 void FCC::update_nearest_cell(water_info *w)
@@ -375,7 +390,7 @@ void FCC::update_nearest_cell(water_info *w)
         dx = x - curr_center[0];
         dy = y - curr_center[1];
         dz = z - curr_center[2];
-        
+
         double curr_dist = NORMSQ(dx, dy, dz);
         if (curr_dist < min_dist)
         {
@@ -611,7 +626,7 @@ void FCC::apply_bcs_on_mnps(std::vector<MNP_info> *mnps)
                     mnps->emplace_back(x, y, z + bound, r, M);
                 }
             }
-            
+
             else if (y - border < 0) // near front and left sides
             {
                 mnps->emplace_back(x - bound, y + bound, z, r, M);
@@ -674,7 +689,7 @@ void FCC::apply_bcs_on_mnps(std::vector<MNP_info> *mnps)
                     mnps->emplace_back(x, y, z + bound, r, M);
                 }
             }
-            
+
             else if (y - border < 0) // near back and left sides
             {
                 mnps->emplace_back(x + bound, y + bound, z, r, M);
@@ -730,7 +745,7 @@ void FCC::apply_bcs_on_mnps(std::vector<MNP_info> *mnps)
                     mnps->emplace_back(x, y, z + bound, r, M);
                 }
             }
-            
+
             else if (y - border < 0) // near left side
             {
                 mnps->emplace_back(x, y + bound, z, r, M);
