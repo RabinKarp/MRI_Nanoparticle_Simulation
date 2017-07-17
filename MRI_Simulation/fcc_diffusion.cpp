@@ -150,7 +150,7 @@ bool FCC::checkLatticeOverlap(double x, double y, double z, double r) {
        double sqDist = NORMSQ(dx, dy, dz);
 
        if (sqDist < pow(cell_r + r, 2)
-           && sqDist > pow(std::max(0.0, cell_r - r), 2)) {
+           && sqDist > pow((cell_r - r), 2)) {
            overlaps = true;
        }
    }
@@ -198,7 +198,7 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
             z = gen.rand_pos_double() * bound;
             invalid = false;
 
-            // re-throw if the nanoparticle is inside a cell
+            // re-throw if the nanoparticle is inside/outside a cell (depends on flag)
             for (int j = 0; j < num_cells && !invalid; j++)
             {
                 double dx = x - fcc[j][0];
@@ -208,12 +208,15 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
                 // Check for invalid MNP's (overlapping with cell boundaries,
                 // not in desired intracellular or extracellular locations, and
                 // set a flag to rethrow if needed)
-#ifdef EXTRACELLULAR
-                if (NORMSQ(dx, dy, dz) < pow(cell_r + mnp_radius, 2))
+#if defined EXTRACELLULAR
+                if (NORMSQ(dx, dy, dz) < pow(cell_r + mnp_radius, 2)) {
                     invalid = true;
+                }
 #elif defined INTRACELLULAR
-                if (NORMSQ(dx, dy, dz) > pow(cell_r - mnp_radius, 2))
+                if ((checkLatticeContainment(x, y, z) == -1) ||
+                    checkLatticeOverlap(x, y, z, mnp_radius)) {
                     invalid = true;
+                }
 // Just check for cell boundary overlap in this case
 #elif defined INTRA_EXTRA
                 if ((NORMSQ(dx, dy, dz) > pow(cell_r - mnp_radius, 2))
@@ -308,6 +311,7 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
                     bool invalid = true;
                     while (invalid)
                     {
+                        invalid = false;
 #ifdef INTRACELLULAR
                         double norm = gen.rand_pos_double() * (cell_r);
                         water_info loc = rand_displacement(norm, gen);
@@ -330,11 +334,11 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
                         x = loc.x + fcc[i][0];
                         y = loc.y + fcc[i][1];
                         z = loc.z + fcc[i][2];
-                        if(checkLatticeOverlap(x, y, z, r))
+                        if(checkLatticeOverlap(x, y, z, r)) {
                             invalid = true;
+                        }
 #endif
                         std::vector<MNP_info>::iterator m, start = mnps->begin();
-                        invalid = false;
                         for (m = start; m != mnps->end() && !invalid; m++)
                         {
                             double dx = x - m->x;
@@ -399,7 +403,7 @@ void FCC::print_mnp_stats(std::vector<MNP_info> *mnps)
         sum_V += 4.0f/3.0f * pi * pow(radius, 3);
         sum_r += radius;
     }
-#ifndef EXTRACELLULAR
+#ifndef UNCLUSTERED
     sum_V /= mnp_pack;
 #endif
     unsigned num_mnp = mnps->size();

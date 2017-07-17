@@ -39,17 +39,17 @@ const double mnp_radius = .1;           // radius of one nanoparticle (um) (.1 N
 #undef INTRA_EXTRA
 
 // Exactly ONE of the two flags below must be set
-#undef UNCLUSTERED
-#define CLUSTERED
+#define UNCLUSTERED
+#undef CLUSTERED
 
 const double u_throw_coeff = 1.5;
-const double lipid_width = 0.002;      // Lipid bilayer width surrounding MNPs
-#define LIPID_ENVELOPE
+const double lipid_width = 0.002;      // Lipid width surrounding intracellular MNPs in um
+#undef LIPID_ENVELOPE
 
 #ifdef UNCLUSTERED
 const int num_mnps = (1.760e3);           // number of MNPs (if all extracellular) (1.76e3 NV)
 const double mmoment = 1.7e-15;           // magnetic moment of each MNP (1.7e-15 NV)
-const double scale = raw_scale;         // to account for smaller MNPs
+const double scale = raw_scale;           // to account for smaller MNPs
 #elif defined CLUSTERED
 const double mnp_pack = 3;              // influences MNP cluster packing
 const double scale = raw_scale;         // to account for larger MNPs
