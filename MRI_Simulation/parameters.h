@@ -26,7 +26,7 @@ const int num_runs = 1;     // number of times to run T2 simulation
 #define DEBUG_MNPS           // create output file w/ all MNP coordinates?
 #undef DEBUG_TREE           // check water/node residency via assertions?
 #undef DEBUG_FIELD          // create output file w/ B_z at all leaf nodes?
-#define TIMED_OUTPUT         // print out a progress report every 1ms?
+#undef TIMED_OUTPUT         // print out a progress report every 1ms?
 
 
 /* Molecule and nanoparticle info */
@@ -34,17 +34,17 @@ const int num_water = 2000;              // number of waters in simulation
 const double mnp_radius = .1;           // radius of one nanoparticle (um) (.1 NV)
 
 // Exactly ONE of the three flags below must be set
-#undef EXTRACELLULAR                    // MNPs intracellular or extracellular?
-#define INTRACELLULAR
+#define EXTRACELLULAR                    // MNPs intracellular or extracellular?
+#undef INTRACELLULAR
 #undef INTRA_EXTRA
 
 // Exactly ONE of the two flags below must be set
-#define UNCLUSTERED
-#undef CLUSTERED
+#undef UNCLUSTERED
+#define CLUSTERED
 
 const double u_throw_coeff = 1.5;
 const double lipid_width = 0.002;      // Lipid width surrounding intracellular MNPs in um
-#undef LIPID_ENVELOPE
+#define LIPID_ENVELOPE
 
 #ifdef UNCLUSTERED
 const int num_mnps = (1.760e3);           // number of MNPs (if all extracellular) (1.76e3 NV)

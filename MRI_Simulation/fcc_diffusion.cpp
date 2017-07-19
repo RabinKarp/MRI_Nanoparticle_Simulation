@@ -263,7 +263,7 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
     apply_bcs_on_mnps(mnps);
     return mnps;
 }
-
+/* endif UNCLUSTERED */
 #elif defined CLUSTERED
 /*
  * Initializes the magnetic nanoparticle clusters in different cells of the
@@ -325,8 +325,7 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
                         x = loc.x + fcc[i][0];
                         y = loc.y + fcc[i][1];
                         z = loc.z + fcc[i][2];
-                        if(checkLatticeContainment(x, y, z) != -1 ||
-                            checkLatticeOverlap(x, y, z, r))
+                        if(checkLatticeContainment(x, y, z) != -1)
                             invalid = true;
 #elif defined INTRA_EXTRA
                         double norm = gen.rand_pos_double() * cell_r * u_throw_coeff;
@@ -334,9 +333,12 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
                         x = loc.x + fcc[i][0];
                         y = loc.y + fcc[i][1];
                         z = loc.z + fcc[i][2];
-                        if(checkLatticeOverlap(x, y, z, r)) {
+
+                        // If the MNP center occurs inside ANOTHER cell,
+                        // check and re-throw
+                        if(checkLatticeContainment(x, y, z) != -1 &&
+                            checkLatticeContainment(x, y, z) != i)
                             invalid = true;
-                        }
 #endif
                         std::vector<MNP_info>::iterator m, start = mnps->begin();
                         for (m = start; m != mnps->end() && !invalid; m++)
@@ -382,7 +384,7 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
     apply_bcs_on_mnps(mnps);
     return mnps;
 }
-#endif /* EXTRACELLULAR */
+#endif /* CLUSTERED */
 
 /*
  * Prints out the number of nanoparticles in the lattice, the volume fraction of
@@ -390,10 +392,14 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
  */
 void FCC::print_mnp_stats(std::vector<MNP_info> *mnps)
 {
+    int num_intracellular = 0;
     double sum_V = 0, sum_r = 0;
     std::vector<MNP_info>::iterator np;
     for (np = mnps->begin(); np < mnps->end(); np++)
     {
+        if(checkLatticeContainment(np->x, np->y,np->z) != -1)
+            num_intracellular++;
+
         // Factor OUT the lipid layer coating intracellular MNPs
         double radius = np->r;
 #ifdef LIPID_ENVELOPE
@@ -407,6 +413,7 @@ void FCC::print_mnp_stats(std::vector<MNP_info> *mnps)
     sum_V /= mnp_pack;
 #endif
     unsigned num_mnp = mnps->size();
+    std::cout << "Number of Intracellular MNPs: " << num_intracellular << std::endl;
     std::cout << "Volume fraction of MNPs: " << sum_V/pow(bound, 3);
     std::cout << std::endl << "Average MNP radius: " << sum_r/num_mnp;
     std::cout << "um" << std::endl << "Before applying boundary conditions, ";
