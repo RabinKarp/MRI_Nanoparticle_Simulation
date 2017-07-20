@@ -29,7 +29,7 @@ typedef struct water_info {
     int nearest;
 
     /*
-     * The addition of a water_info struct w to this entails adding the (x,y,z) 
+     * The addition of a water_info struct w to this entails adding the (x,y,z)
      * coordinates of w to the coordinates of this.
      */
     void operator+=(struct water_info &w)
