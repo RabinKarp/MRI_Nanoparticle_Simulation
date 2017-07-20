@@ -39,6 +39,7 @@ FCC::FCC(double D_in, double D_out, double P_expr)
     this->reflectOI = 1 - ((1 - reflectIO) * sqrt(D_in/D_out));
 }
 
+
 /*
  * Given a set of Cartesian boundary conditions, initialize a given number of
  * water molecules distributed randomly over the cubical space [0, L)^3.

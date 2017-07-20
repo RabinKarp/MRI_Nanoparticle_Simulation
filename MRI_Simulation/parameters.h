@@ -9,6 +9,13 @@
 #ifndef PARAMETERS_H
 #define PARAMETERS_H
 
+// Macro for GPU-callable member functions
+#ifdef __CUDACC__
+#define CUDA_CALLABLE_MEMBER __host__ __device__
+#else
+#define CUDA_CALLABLE_MEMBER
+#endif
+
 #include <cmath>
 
 /* Parameters affecting nanoparticle residency in nodes */

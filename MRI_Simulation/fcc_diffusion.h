@@ -35,6 +35,8 @@ class FCC
     std::vector<MNP_info> *init_mnps(XORShift<> &gen);
     water_info *init_molecules(double L, int n, std::vector<MNP_info> *mnps,\
         XORShift<> &gen);
+    std::vector<MNP_info> *init_cluster(MNP_info &init, double r_pack,\
+        int num_mnp, XORShift<> &gen);
     void update_nearest_cell_full(water_info *w);
 
     private:
@@ -46,12 +48,6 @@ class FCC
     void update_nearest_cell(water_info *w);
     void print_mnp_stats(std::vector<MNP_info> *mnps);
     void apply_bcs_on_mnps(std::vector<MNP_info> *mnps);
-
-    // Helper functions here
-    inline bool checkMNPOverlap(std::vector<MNP_info> *mnps,
-      double x, double y, double z, double r);
-    inline bool checkLatticeOverlap(double x, double y, double z, double r);
-    inline int checkLatticeContainment(double x, double y, double z);
 
     /*
      * Instance variable representing the centers of all the cells in an FCC
@@ -261,5 +257,3 @@ class FCC
 };
 
 #endif /* FCC_DIFFUSION_H */
-
-std::vector<MNP_info> *init_cluster(MNP_info &init, double r_pack, int num_mnp, XORShift<> &gen);

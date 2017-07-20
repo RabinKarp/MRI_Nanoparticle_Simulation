@@ -14,7 +14,7 @@
 #include "fcc_diffusion.h"
 #include "parameters.h"
 
-const double g = 42.5781e6;             // gyromagnetic ratio in MHz/T
+
 const int pfreq = (int)(1e-3/tau);      // print net magnetization every 1us
 static double **mag;                    // net magnetization data
 static std::mutex mtx;                  // regulates access to print buffers
