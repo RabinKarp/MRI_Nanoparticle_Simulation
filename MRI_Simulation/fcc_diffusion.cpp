@@ -35,7 +35,15 @@ void FCC::initLattice(int dim) {
     x = 0;
     y = 0;
     z = 0;
-    int sphereLookup[lw][lw][lw];
+
+    // Initialize every entry in the sphere lookup array to sentinel -1
+    for(int i = 0; i < lw; i++) {
+        for(int j = 0; j < lw; j++) {
+            for(int k = 0; k < lw; k++) {
+                sphereLookup[i][j][k] = -1;
+            }
+        }
+    }
 
     for(int i = 0; i < num_cells; i++) {
         fcc[i][0] = x;
@@ -53,32 +61,6 @@ void FCC::initLattice(int dim) {
         }
     }
 
-    // Iterate through each cell and compute its neighbors
-    for(int i = 0; i < num_cells; i++) {
-        for(int j = 0; j < 12; j++) {
-            x = fcc[i][0] + nOffsets[j][0];
-            y = fcc[i][1] + nOffsets[j][1];
-            z = fcc[i][2] + nOffsets[j][2];
-
-            // At the edge of the lattice? Just put in another reference to
-            // the current cell, since the immediate neighbors are accounted
-            // for anyway
-
-            if(x < 0 || y < 0 || z < 0 || x >= lw || y >= lw || z >= lw)
-                neighbors[i][j] = i;
-            else
-                neighbors[i][j] = sphereLookup[x][y][z];
-
-#ifdef DEBUG_LATTICE
-            f2 << neighbors[i][j];
-            if(j != 11)
-                f2 << ",";
-#endif
-         }
-#ifdef DEBUG_LATTICE
-       f2 << std::endl;
-#endif
-    }
     // Post-processing (for backwards-compatibility) subtract off the
     // lattice dimension from each of the coordinates to center the lattice
     // about the origin

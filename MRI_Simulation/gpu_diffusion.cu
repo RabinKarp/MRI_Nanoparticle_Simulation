@@ -1,3 +1,4 @@
+
 #include <curand.h>
 #include <curand_kernel.h>
 
@@ -18,15 +19,34 @@ const int threads_per_block = 512;
 
 const double g = 42.5781e6;             // gyromagnetic ratio in MHz/T
 
+const int spheres_per_cube = 14;
+// NOTE: This needs to be copied over to the GPU, can be stored in constant
+// memory
+const int offsets[spheres_per_cube] = {
+    {0, 0, 0}, {2, 0, 0}, {0, 2, 0},
+    {2, 2, 0}, {1, 1, 0}, {1, 0, 1},
+    {0, 1, 1}, {2, 1, 1}, {1, 2, 1},
+    {0, 0, 2}, {2, 0, 2}, {0, 2, 2},
+    {2, 2, 2}, {1, 1, 2}};
+
+#define MAX 500000
+
+/**
+ * Struct containing all pointers passed from the CPU (host) to the GPU (device)
+ * and other information that the GPU needs, e.g. an array of states for each
+ * thread.
+ */
 struct GPUData {
     int num_mnps;
     MNP_info* dev_mnp;
 
-    // The CUDA random number generator
-    curandState_t state;
-
     double* dev_lattice;
+    int* sphereLookup;
     water_info* dev_waters;
+
+    unsigned int seed;
+    curandState_t* states;
+
     /**
      * The array of magnetizations is a double array of dimension
      * (t * num_blocks). Each block writes to a unique portion of the shared
@@ -34,10 +54,6 @@ struct GPUData {
      */
      double* magnetizations;
 };
-
-void HANDLE_ERROR(int errorCode) {
-    // Now what?
-}
 
 /**
  * Prepares data in proper format, loads data onto the GPU and allocates
@@ -47,8 +63,11 @@ GPUData initializeGPU(vector<MNP_info> *mnpList, water_info* w) {
     GPUData d;
     d.num_mnps = mnpList->size();
 
-    // Initialize the random number generator
-    curandCreateGenerator(CURAND_RNG_PSEUDO_XORWOW);
+    // TODO: Seed the random number generator with the system time!
+
+    int totalThreads = num_blocks * threads_per_block;
+    // Initialize a set of random states on the devce
+    cudaMalloc((void**) &(d.states), totalThreads * sizeof(curandState_t));
 
     // Get data into standard C arrays on the host
     MNP_info* mnps = calloc(mnpList->size() , sizeof(MNP_info));
@@ -65,23 +84,23 @@ GPUData initializeGPU(vector<MNP_info> *mnpList, water_info* w) {
     }
 
     // Allocate the input data on the GPU
-    HANDLE_ERROR(cudaMalloc((void **) d.dev_mnp,
+    HANDLE_ERROR(cudaMalloc((void **) &(d.dev_mnp),
         sizeof(MNP_info) * d.num_mnps));
-    HANDLE_ERROR(cudaMalloc((void **) d.dev_waters,
+    HANDLE_ERROR(cudaMalloc((void **) &(d.dev_waters),
         sizeof(water_info) * num_water));
-    HANDLE_ERROR(cudaMalloc((void **) d.dev_lattice,
+    HANDLE_ERROR(cudaMalloc((void **) &(d.dev_lattice),
         sizeof(MNP_info) * d.num_mnps));
 
     // Allocate the output data on the GPU
-    HANDLE_ERROR(cudaMalloc((void **) d.magnetizations,
+    HANDLE_ERROR(cudaMalloc((void **) &(d.magnetizations),
         sizeof(double) * t * num_blocks));
 
     // Copy waters, MNPs, and cells to device
-    HANDLE_ERROR(cudaMemcpy(mnps, d.dev_mnp, sizeof(MNP_info) * d.num_mnps,
+    HANDLE_ERROR(cudaMemcpy((void *) mnps, (void *) d.dev_mnp, sizeof(MNP_info) * d.num_mnps,
         cudaMemcpyHostToDevice));
-    HANDLE_ERROR(cudaMemcpy(w, d.dev_waters, sizeof(water_info) * num_water,
+    HANDLE_ERROR(cudaMemcpy((void*) w, (void *) d.dev_waters, sizeof(water_info) * num_water,
         cudaMemcpyHostToDevice));
-    HANDLE_ERROR(cudaMemcpy(latticePoints, d.dev_lattice,
+    HANDLE_ERROR(cudaMemcpy((void *) latticePoints, (void *) d.dev_lattice,
         sizeof(double) * num_cells * 3,
         cudaMemcpyHostToDevice));
 
@@ -102,7 +121,7 @@ double* finalizeGPU(GPUData d) {
     double* netMagnetizations = calloc(t, sizeof(double));
 
     // Copy the device memory to the host
-    HANDLE_ERROR(cudaMemcpy(computedMagnetizations, d.magnetizations,
+    HANDLE_ERROR(cudaMemcpy((void *) computedMagnetizations, (void *) d.magnetizations,
         sizeof(double) * t * num_blocks,
         cudaMemcpyDeviceToHost));
 
@@ -115,6 +134,7 @@ double* finalizeGPU(GPUData d) {
     }
 
     // Free device memory
+    // TODO: Need to complete this section and clean up ALL device memory!
     cudaFree(d.dev_mnp);
     cudaFree(d.dev_lattice);
     cudaFree(d.dev_waters);
@@ -122,8 +142,32 @@ double* finalizeGPU(GPUData d) {
 
     // Free host memory allocated in this function
     free(computedMagnetizations);
-
     return netMagnetizations
+}
+
+/**
+ * Initializes the random state associated with each thread - used so that
+ * each thread can generate its own random numbers.
+ */
+__device__ void initRandomState(int tid, unsigned int seed, curandState_t* states) {
+    curand_init(seed, tid, 0, states + tid);
+}
+
+/**
+ * Returns a double randomly and uniformly distributed from 0 to 1.
+ */
+__device__ double getUniformDouble(int tid, curandState_t* states) {
+    return curand_uniform_double(states + tid);
+}
+
+/**
+ * Returns a double from a standard normal distribution with the given
+ * standard deviation.
+ *
+ * TODO: Check whether this is the correct way to scale a normal distribution
+ */
+__device__ void getNormalDouble(int tid, curandState_t* states double stdev) {
+    return curand_normal_double(states + tid) * stdev;
 }
 
 __device__ bool in_cell(water_info *w) {
@@ -136,22 +180,40 @@ __device__ bool in_cell(water_info *w) {
 
 /**
  * Updates the cell closest to a water molecule, which is stored by that
- * molecule for easy reference.
+ * molecule for easy reference. We use a sphere lookup hash to do so.
  */
-__device__ void updateNearestCell(water_info *w) {
+__device__ void updateNearestCell(water_info *w, dev_lattice* lattice) {
+    // Scale and integerize the coordinates
+    double x = ((int) (w->x / (cell_r * 4) * sqrt(2)))*2;
+    double y = ((int) (w->y / (cell_r * 4) * sqrt(2)))*2;
+    double z = ((int) (w->z / (cell_r * 4) * sqrt(2)))*2;
 
+    double cDist = MAX;
+    for(int i = 0; i < spheres_per_cube; i++) {
+        int idx = sphereLookup[x + offsets[i][1]][y + offsets[i][2]][[z + offsets[i][3]]];
+        double dx = lattice[idx][0] - w->x;
+        double dy = lattice[idx][1] - w->y;
+        double dz = lattice[idx][2] - w->z;
+        if(NORMSQ(dx, dy, dz) < cDist) {
+            w->nearest = idx;
+            cDist = NORMSQ(dx, dy, dz);
+        }
+    }
 }
 
 /**
  * Returns the random displacement of a water molecule according to a specified
  * normal distribution.
  */
-__device__ water_info rand_displacement() {
+__device__ water_info rand_displacement(water_info *w) {
+    water_info disp;
+    double norm;
+    if(in_cell(w)) {
 
-    // Assume that we somehow already have the displacement norm
-    double d;
+    }
+    else {
 
-
+    }
 }
 
 /**
@@ -185,7 +247,8 @@ __device__ bool mnpReflection(water_info* w, int mnp_count, MNP_info *mnps) {
         double dx = mnps[i].x - w->x;
         double dy = mnps[i].y - w->y;
         double dz = mnps[i].z - w->z;
-        if(NORMSQ(dx, dy, dz) < pow(cell_r, 2)) {
+        double r = mnps[i].r;
+        if(NORMSQ(dx, dy, dz) < r * r) {
             reflect = true;
         }
     }
@@ -256,6 +319,7 @@ __device__ void boundary_conditions(water_info* w) {
 __global__ void waterSimulate(GPUData d) {
     __shared__ double mags[threads_per_block];
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    initRandomState(tid, d.states, )
 
     for(int i = 0; i < t; i++) {
         if(tid < num_water) {
@@ -265,7 +329,6 @@ __global__ void waterSimulate(GPUData d) {
               // TODO: Check for boundary condition crossing
               boundary_conditions(w);
               // TODO: Check for cell reflection
-
               // TODO: Check for MNP reflection
               // Accumulate phase
               accumulatePhase(w);

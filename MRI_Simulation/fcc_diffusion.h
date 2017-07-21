@@ -66,6 +66,7 @@ class FCC
      * lattice (unscaled).
      */
     double fcc[num_cells][3];
+    int sphereLookup[lv][lv][lv]; // TODO: Move lv to the header file!
 
     /*
      * Instance variable where the array stored at the ith index corresponds to
