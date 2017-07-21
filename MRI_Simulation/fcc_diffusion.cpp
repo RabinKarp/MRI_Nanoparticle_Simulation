@@ -30,7 +30,6 @@ void FCC::initLattice(int dim) {
     std::ofstream f2("neighbors.csv");
 #endif
 
-    int lw = 2 * dim + 1;
     int x, y, z;
     x = 0;
     y = 0;
@@ -72,6 +71,32 @@ void FCC::initLattice(int dim) {
         f1 << fcc[i][0] << "," << fcc[i][1] << "," << fcc[i][2] << std::endl;
 #endif
     }
+}
+
+/**
+ * Returns an array containing triple structs with the lattice point centers
+ */
+Triple* FCC::linearLattice() {
+    Triple *linLattice = new Triple[num_cells];
+
+    for(int i = 0; i < num_cells; i++) {
+        linLattice[i].x = fcc[i][0];
+        linLattice[i].y = fcc[i][1];
+        linLattice[i].z = fcc[i][2];
+    }
+    return linLattice;
+}
+
+int* FCC::linearLookupTable() {
+    int* linLookup = new int[lw * lw * lw];
+    for(int i = 0; i < lw; i++) {
+        for(int j = 0; j < lw; j++) {
+            for(int k = 0; k < lw; k++) {
+                linLookup[i * lw * lw + j * lw + k] = sphereLookup[i][j][k];
+            }
+        }
+    }
+    return linLookup;
 }
 
 /*
@@ -153,8 +178,8 @@ water_info *FCC::init_molecules(double L, int n, std::vector<MNP_info> *mnps,\
  * coordinates and specified radius overlaps with any of the nanoparticles
  * in a given vector.
  */
-inline bool FCC::checkMNPOverlap(std::vector<MNP_info> *mnps,
-  double x, double y, double z, double r) {
+bool FCC::checkMNPOverlap(std::vector<MNP_info> *mnps,
+    double x, double y, double z, double r) {
     bool overlaps = false;
     std::vector<MNP_info>::iterator curr;
     for (curr = mnps->begin(); curr != mnps->end() && !overlaps; curr++)
@@ -173,7 +198,7 @@ inline bool FCC::checkMNPOverlap(std::vector<MNP_info> *mnps,
  * coordinates and radius OVERLAPS with the boundary of any sphere in
  * the FCC lattice.
  */
-inline bool FCC::checkLatticeOverlap(double x, double y, double z, double r) {
+bool FCC::checkLatticeOverlap(double x, double y, double z, double r) {
     bool overlaps = false;
     for(int i = 0; i < num_cells; i++) {
         double dx = x - fcc[i][0];

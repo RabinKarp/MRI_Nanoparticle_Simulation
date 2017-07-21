@@ -23,6 +23,7 @@
 const int num_cells =               // number of cells in the FCC lattice
     1 + (3 * n) + (6 * n * n) + (4 * n * n * n);
 const int num_neighbors = 12;       // number of neighbors each FCC cell has
+const int lw = 2 * n + 1;
 
 /**
  * x, y, and z offsets for neighbors of a given cell in FCC lattice
@@ -43,6 +44,9 @@ class FCC
     public:
     FCC(double D_in, double D_out, double P);
     double diffusion_step(water_info *w, Octree *tree, XORShift<> &gen);
+    Triple* linearLattice();
+    int* linearLookupTable();
+
     std::vector<MNP_info> *init_mnps(XORShift<> &gen);
     water_info *init_molecules(double L, int n, std::vector<MNP_info> *mnps,\
         XORShift<> &gen);
@@ -60,13 +64,17 @@ class FCC
     void update_nearest_cell(water_info *w);
     void print_mnp_stats(std::vector<MNP_info> *mnps);
     void apply_bcs_on_mnps(std::vector<MNP_info> *mnps);
+    bool checkMNPOverlap(std::vector<MNP_info> *mnps,
+      double x, double y, double z, double r);
+    bool checkLatticeOverlap(double x, double y, double z, double r);
+    int checkLatticeContainment(double x, double y, double z);
 
     /*
      * Instance variable representing the centers of all the cells in an FCC
      * lattice (unscaled).
      */
     double fcc[num_cells][3];
-    int sphereLookup[lv][lv][lv]; // TODO: Move lv to the header file!
+    int sphereLookup[lw][lw][lw];
 
     /*
      * Instance variable where the array stored at the ith index corresponds to

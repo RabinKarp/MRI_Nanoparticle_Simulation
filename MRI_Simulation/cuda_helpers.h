@@ -1,3 +1,5 @@
+#include <cstdio>
+
 #ifndef CUDA_HELPERS
 #define CUDA_HELPERS
 

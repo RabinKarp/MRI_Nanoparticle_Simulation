@@ -17,6 +17,11 @@ using namespace std;
 const int num_blocks = 32;
 const int threads_per_block = 512;
 
+double in_stdev = sqrt(pi * D_in * tau);
+double out_stdev = sqrt(pi * D_out * tau);
+double reflectIO = 1 - sqrt(tau / (6*D_in)) * 4 * P_expr;
+double reflectOI = 1 - ((1 - reflectIO) * sqrt(D_in/D_out));
+
 const double g = 42.5781e6;             // gyromagnetic ratio in MHz/T
 
 const int spheres_per_cube = 14;
@@ -156,8 +161,8 @@ __device__ void initRandomState(int tid, unsigned int seed, curandState_t* state
 /**
  * Returns a double randomly and uniformly distributed from 0 to 1.
  */
-__device__ double getUniformDouble(int tid, curandState_t* states) {
-    return curand_uniform_double(states + tid);
+__device__ double getUniformDouble(curandState_t* state) {
+    return curand_uniform_double(state);
 }
 
 /**
@@ -166,8 +171,8 @@ __device__ double getUniformDouble(int tid, curandState_t* states) {
  *
  * TODO: Check whether this is the correct way to scale a normal distribution
  */
-__device__ void getNormalDouble(int tid, curandState_t* states double stdev) {
-    return curand_normal_double(states + tid) * stdev;
+__device__ void getNormalDouble(curandState_t* state, double stdev) {
+    return curand_normal_double(state) * stdev;
 }
 
 __device__ bool in_cell(water_info *w) {
@@ -205,15 +210,28 @@ __device__ void updateNearestCell(water_info *w, dev_lattice* lattice) {
  * Returns the random displacement of a water molecule according to a specified
  * normal distribution.
  */
-__device__ water_info rand_displacement(water_info *w) {
+__device__ water_info rand_displacement(water_info *w, curandState_t* states) {
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
+
     water_info disp;
     double norm;
     if(in_cell(w)) {
-
+        norm = getNormalDouble(states + tid, in_stdev);
     }
     else {
-
+        norm = getNormalDouble(states + tid, out_stdev);
     }
+    disp.x = getUniformDouble(states + tid);
+    disp.y = getUniformDouble(states + tid);
+    dips.z = getUniformDouble(states + tid);
+
+    double nConstant = NORMSQ(disp.x, disp.y, disp.z);
+
+    disp.x *= norm / nConstant;
+    disp.y *= norm / nConstant;
+    disp.z *= norm / nConstant;
+
+    return disp;
 }
 
 /**
@@ -223,6 +241,8 @@ __device__ water_info rand_displacement(water_info *w) {
  *
  */
 __device__ bool cellReflection(water_info* i, water_info* f) {
+
+    bool ret =
     // First handle the case where the water diffuses into the cell
     if( ! in_cell(i) && in_cell(f)) {
         // Flip a coin to decide whether or not to diffuse into the cell

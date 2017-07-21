@@ -18,6 +18,12 @@
 
 #include <cmath>
 
+struct Triple {
+    double x;
+    double y;
+    double z;
+};
+
 /* Parameters affecting nanoparticle residency in nodes */
 #undef FULL_BOUNDARIES      // use full boundary conditions to calculate field?
 const double raw_scale = 7; // calculate B explicitly within scale*R of cluster
@@ -32,7 +38,7 @@ const int num_runs = 1;     // number of times to run T2 simulation
 
 /* Switches for enabling or disabling debugging output files */
 #undef DEBUG_LATTICE        // create output file w/ cell centers and neighbors?
-#undef DEBUG_DIFF           // create output file w/ RMS displacements?
+#define DEBUG_DIFF          // create output file w/ RMS displacements?
 #undef DEBUG_MNPS           // create output file w/ all MNP coordinates?
 #undef DEBUG_TREE           // check water/node residency via assertions?
 #undef DEBUG_FIELD          // create output file w/ B_z at all leaf nodes?
