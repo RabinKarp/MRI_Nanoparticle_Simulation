@@ -21,7 +21,7 @@ water_info rand_displacement(double d, XORShift<> &gen)
     double dy = gen.rand_double();
     double dz = gen.rand_double();
     double norm = sqrt(NORMSQ(dx, dy, dz));
-    
+
     water_info w;
     w.x = dx / norm * d;
     w.y = dy / norm * d;

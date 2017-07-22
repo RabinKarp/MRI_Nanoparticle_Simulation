@@ -90,7 +90,7 @@ const double P_expr = 0.034;            // permeability in micron per ms
 
 /* Time scales and step sizes */
 const double tau = 1e-6;                // time step in ms
-const double totaltime = 67.0;          // total time to run for in ms
+const double totaltime = 10.0;          // total time to run for in ms
 const int t = (int)(totaltime/tau);     // total time steps
 const double taucp = 5.5;               // Carr-Purcell time in ms
 const int tcp = (int)(taucp/tau);       // time steps per Carr-Purcell time
