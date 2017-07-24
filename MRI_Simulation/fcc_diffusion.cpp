@@ -319,12 +319,22 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
                         y = loc.y + fcc[i][1];
                         z = loc.z + fcc[i][2];
 #elif defined EXTRACELLULAR
+#ifdef THROW_FREE // Throw cluster anywhere in extracellular space - the check
+                  // against cell containment occurs after the branch
+                        x = gen.rand_pos_double() * bound;
+                        y = gen.rand_pos_double() * bound;
+                        z = gen.rand_pos_double() * bound;
+
+#else // Throw the particle within a certain vicinity of the labeled cell
                         double norm = cell_r * (1 + gen.rand_pos_double()
                             * (u_throw_coeff - 1));
                         water_info loc = rand_displacement(norm, gen);
                         x = loc.x + fcc[i][0];
                         y = loc.y + fcc[i][1];
                         z = loc.z + fcc[i][2];
+#endif
+                        // Re-throw in case of cell containment, for both cases
+                        // THROW_FREE set and unset
                         if(checkLatticeContainment(x, y, z) != -1)
                             invalid = true;
 #elif defined INTRA_EXTRA

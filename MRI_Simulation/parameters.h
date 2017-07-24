@@ -23,7 +23,7 @@ const int num_runs = 1;     // number of times to run T2 simulation
 
 /* Switches for enabling or disabling debugging output files */
 #undef DEBUG_DIFF           // create output file w/ RMS displacements?
-#define DEBUG_MNPS           // create output file w/ all MNP coordinates?
+#define DEBUG_MNPS          // create output file w/ all MNP coordinates?
 #undef DEBUG_TREE           // check water/node residency via assertions?
 #undef DEBUG_FIELD          // create output file w/ B_z at all leaf nodes?
 #undef TIMED_OUTPUT         // print out a progress report every 1ms?
@@ -42,8 +42,18 @@ const double mnp_radius = .1;           // radius of one nanoparticle (um) (.1 N
 #undef UNCLUSTERED
 #define CLUSTERED
 
+/**
+ * This flag should only be defined if the flags CLUSTERED and EXTRACELLULAR
+ * are also set (guards in place so this occurs). When the flag is set,
+ * clustered MNPs are thrown anywhere in extracellular space within the
+ * simulation bound for a particular labelled cell.
+ */
+#if defined CLUSTERED && defined EXTRACELLULAR
+#undef THROW_FREE // This flag can be toggled on and off
+#endif
+
 const double u_throw_coeff = 1.5;
-const double lipid_width = 0.002;      // Lipid width surrounding intracellular MNPs in um
+const double lipid_width = 0.002;        // Lipid width surrounding intracellular MNPs in um
 #define LIPID_ENVELOPE
 
 #ifdef UNCLUSTERED
