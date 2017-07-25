@@ -1,5 +1,5 @@
-#ifndef XORSHIFT_H
-#define XORSHIFT_H
+#ifndef GPUXORSHIFT_H
+#define GPUXORSHIFT_H
 
 /*  The code for the xoroshiro128+ (as indicated below in comment blocks) was
     written in 2016 by David Blackman and Sebastiano Vigna (vigna@acm.org).
@@ -16,11 +16,10 @@
  * standard conditions placed on UniformRandomNumberGenerator classes.
  */
 template <typename T = uint64_t>
-class XORShift
+class GPU_XORShift
 {
     public:
     typedef T result_type;
-    XORShift(uint64_t x) { seed_rand(x); }
 
     /* Returns the smallest uint64_t that can be generated */
     static constexpr result_type min(void) { return 0; }
@@ -29,7 +28,7 @@ class XORShift
     static constexpr result_type max(void) { return -1; }
 
     /* Returns the next random uint64_t */
-     result_type operator()(void) { return next_rand(); }
+    __device__ result_type operator()(void) { return next_rand(); }
 
     /*
      * The code below was written by Aadyot Bhatnagar (2016). It uses the
@@ -41,7 +40,7 @@ class XORShift
     /*
      * Returns a double in the range [0, 1).
      */
-    double rand_pos_double(void)
+    __device__ double rand_pos_double(void)
     {
         uint64_t x = next_rand();
         union {uint64_t i; double d; } u;
@@ -53,7 +52,7 @@ class XORShift
     /*
      * Returns a double in the range (-1, 1).
      */
-    double rand_double(void)
+    __device__ double rand_double(void)
     {
         uint64_t x = next_rand();
         union {uint64_t i; double d; } u;
@@ -69,7 +68,7 @@ class XORShift
        non-overlapping subsequences for parallel computations. Written
        by the authors of the original xoroshiro128+ code.*/
 
-    void jump(void) {
+    __device__ void jump(void) {
         static const uint64_t JUMP[] = {0xbeac0467eba5facb, 0xd86b048b86aa9922};
 
         uint64_t s0 = 0;
@@ -85,6 +84,33 @@ class XORShift
 
         s[0] = s0;
         s[1] = s1;
+    }
+
+    /* This is a fixed-increment version of Java 8's SplittableRandom generator
+       See http://dx.doi.org/10.1145/2714064.2660195 and
+       http://docs.oracle.com/javase/8/docs/api/java/util/SplittableRandom.html
+
+       It is a very fast generator passing BigCrush, and it can be useful if
+       for some reason you absolutely want 64 bits of state; otherwise, we
+       rather suggest to use a xorshift128+ (for moderately parallel
+       computations) or xorshift1024* (for massively parallel computations)
+       generator.
+
+       The function has been modified from the original code used in the
+       splitmix64 PRNG to seed an array of two uint64_t's for use in the
+       xoroshiro128+ PRNG.
+    */
+
+    __device__ void seed_rand(uint64_t x) {
+        uint64_t z;
+        int i;
+        for (i = 0; i < 2; i++)
+        {
+            z = (x += UINT64_C(0x9E3779B97F4A7C15));
+            z = (z ^ (z >> 30)) * UINT64_C(0xBF58476D1CE4E5B9);
+            z = (z ^ (z >> 27)) * UINT64_C(0x94D049BB133111EB);
+            s[i] = z ^ (z >> 31);
+        }
     }
 
 
@@ -111,11 +137,11 @@ private:
 
    uint64_t s[2];
 
-     static inline uint64_t rotl(const uint64_t x, int k) {
+    __device__ static inline uint64_t rotl(const uint64_t x, int k) {
         return (x << k) | (x >> (64 - k));
     }
 
-     uint64_t next_rand(void) {
+    __device__ uint64_t next_rand(void) {
         const uint64_t s0 = s[0];
         uint64_t s1 = s[1];
         const uint64_t result = s0 + s1;
@@ -125,33 +151,6 @@ private:
         s[1] = rotl(s1, 36); // c
 
         return result;
-    }
-
-    /* This is a fixed-increment version of Java 8's SplittableRandom generator
-       See http://dx.doi.org/10.1145/2714064.2660195 and
-       http://docs.oracle.com/javase/8/docs/api/java/util/SplittableRandom.html
-
-       It is a very fast generator passing BigCrush, and it can be useful if
-       for some reason you absolutely want 64 bits of state; otherwise, we
-       rather suggest to use a xorshift128+ (for moderately parallel
-       computations) or xorshift1024* (for massively parallel computations)
-       generator.
-
-       The function has been modified from the original code used in the
-       splitmix64 PRNG to seed an array of two uint64_t's for use in the
-       xoroshiro128+ PRNG.
-    */
-
-    void seed_rand(uint64_t x) {
-        uint64_t z;
-        int i;
-        for (i = 0; i < 2; i++)
-        {
-            z = (x += UINT64_C(0x9E3779B97F4A7C15));
-            z = (z ^ (z >> 30)) * UINT64_C(0xBF58476D1CE4E5B9);
-            z = (z ^ (z >> 27)) * UINT64_C(0x94D049BB133111EB);
-            s[i] = z ^ (z >> 31);
-        }
     }
 };
 #endif /* XORSHIFT_H */

@@ -10,6 +10,7 @@
 #define RAND_WALK_H
 #include <vector>
 #include <cmath>
+#include "parameters.h"
 #include "xorshift.h"
 #define NORMSQ(x, y, z) (x)*(x)+(y)*(y)+(z)*(z)     // compute the norm-squared
 const double pi = atan(1) * 4;                      // global constant for pi
@@ -28,6 +29,7 @@ typedef struct water_info {
     bool in_cell;
     int nearest;
 
+  public:
     /*
      * The addition of a water_info struct w to this entails adding the (x,y,z)
      * coordinates of w to the coordinates of this.

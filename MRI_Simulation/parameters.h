@@ -45,16 +45,16 @@ const int num_runs = 1;     // number of times to run T2 simulation
 #undef TIMED_OUTPUT         // print out a progress report every 1ms?
 
 /* Molecule and nanoparticle info */
-const int num_water = 2000;              // number of waters in simulation
+const int num_water = 2000;             // number of waters in simulation
 const double mnp_radius = (.1)/3;        // radius of one nanoparticle (um)
 
 // Exactly ONE of the three flags below must be defined.
 #undef EXTRACELLULAR                   // MNPs intracellular, extracellular,
-#undef INTRACELLULAR                   // or both?
-#define INTRA_EXTRA
+#define INTRACELLULAR                   // or both?
+#undef INTRA_EXTRA
 
-#undef CLUSTERED                      // MNPs clustered or unclustered?
-#define UNCLUSTERED
+#define CLUSTERED                      // MNPs clustered or unclustered?
+#undef UNCLUSTERED
 
 #define LIPID_ENVELOPE                  // Lipid envelope around intracellular
                                         // MNPs
@@ -90,7 +90,8 @@ const double P_expr = 0.034;            // permeability in micron per ms
 
 /* Time scales and step sizes */
 const double tau = 1e-6;                // time step in ms
-const double totaltime = 10.0;          // total time to run for in ms
+const double totaltime = 1e-2;          // total time to run for in ms
+
 const int t = (int)(totaltime/tau);     // total time steps
 const double taucp = 5.5;               // Carr-Purcell time in ms
 const int tcp = (int)(taucp/tau);       // time steps per Carr-Purcell time

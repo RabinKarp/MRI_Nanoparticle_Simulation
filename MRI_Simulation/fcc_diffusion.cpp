@@ -208,7 +208,7 @@ bool FCC::checkLatticeOverlap(double x, double y, double z, double r) {
         double sqDist = NORMSQ(dx, dy, dz);
 
         if (sqDist < pow(cell_r + r, 2)
-            && sqDist > pow(std::max(0.0, cell_r - r), 2)) {
+            && sqDist > pow(cell_r - r, 2)) {
             overlaps = true;
         }
     }
