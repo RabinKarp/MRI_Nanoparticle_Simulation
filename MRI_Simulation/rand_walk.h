@@ -63,6 +63,8 @@ typedef struct MNP_info
     // initialize with given (x,y,z) as center, radius r, and magnetic moment M
     MNP_info(double x, double y, double z, double r, double M):
         x(x), y(y), z(z), r(r), M(M) {}
+
+    MNP_info() {};
 } MNP_info;
 
 water_info rand_displacement(double d, XORShift<> &gen);

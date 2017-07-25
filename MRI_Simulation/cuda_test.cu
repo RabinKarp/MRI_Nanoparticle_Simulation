@@ -1,6 +1,3 @@
-#define PI 3.14159
-#define HIGH 5000000
-
 #include "cuda_helpers.h"
 
 #include <stdio.h>
@@ -14,13 +11,16 @@
 #include <iostream>
 #include <mutex>
 #include <cassert>
-#include <cmath>
+#include <math.h>
 #include "parameters.h"
 #include "fcc_diffusion.h"
 #include "gpu_random.h"
 
-using namespace std;
+#define HIGH           5000000
+#define MAX_MNPS       1000
+#define M_PI           3.14159265358979323846
 
+using namespace std;
 /**
  *  nvcc cuda_test.cu fcc_diffusion.cpp rand_walk.cpp octree.cpp -arch=sm_61 -lcurand -ccbin "
 C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\bin\amd64_x86"
@@ -29,18 +29,20 @@ C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\bin\amd64_x86"
 #define threads_per_block 256
 const int num_blocks = (num_water + threads_per_block - 1) / threads_per_block;
 
+const double g = 42.5781e6;             // gyromagnetic ratio in MHz/T
+
 // Each kernel execution handles AT MOST this many timesteps
 const int sprintSteps = 10000;
 const int num_uniform_doubles = 4; // # of uniform doubles per water per tstep
 const int num_normal_doubles = 1;  // # of normal  doubles per water per tstep
 
 __constant__ Triple dev_lattice[num_cells];
+__constant__ MNP_info dev_mnps[MAX_MNPS];
 
 struct GPUData {
     int nBlocks;
 
     int num_mnps;
-    MNP_info* dev_mnp;
 
     int num_cells;
     double cell_r;
@@ -49,12 +51,14 @@ struct GPUData {
 
     double reflectIO;
     double reflectOI;
+    double in_stdev;
+    double out_stdev;
 
     int num_waters;
     water_info* waters;
 
-    double in_stdev;
-    double out_stdev;
+    double g;
+    double tau;
 
     unsigned int seed;
 
@@ -78,8 +82,8 @@ void setParameters(GPUData &d) {
     d.in_stdev = sqrt(pi * D_cell * tau);
     d.out_stdev = sqrt(pi * D_extra * tau);
 
-    d.reflectIO = 1 - sqrt(tau / (6*D_in)) * 4 * P_expr;
-    d.reflectOI = 1 - ((1 - reflectIO) * sqrt(D_in/D_out));
+    d.reflectIO = 1 - sqrt(tau / (6*D_cell)) * 4 * P_expr;
+    d.reflectOI = 1 - ((1 - d.reflectIO) * sqrt(D_cell/D_extra));
 
     d.num_cells = num_cells;
     d.num_waters = num_water;
@@ -87,6 +91,8 @@ void setParameters(GPUData &d) {
     d.cell_r = cell_r;
     d.bound = bound;
     d.nBlocks = num_blocks;
+    d.g = g;
+    d.tau = tau;
 }
 
 /**
@@ -110,10 +116,11 @@ __device__ void updateNearest(water_info *w, GPUData &d) {
     w->nearest = cIndex;
 }
 
-__device__ bool cell_reflect(water_info *i, water_info *f) {
+__device__ bool cell_reflect(water_info *i, water_info *f, int tStep, GPUData &d) {
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
     double coin = d.uniform_doubles[tStep * d.num_waters * 4 + tid * 4 + 3];
     bool flip = (i->in_cell && (! f->in_cell) && coin < d.reflectIO)
-                    || ((! i->in_cell) && f->in_cell && coin < d.reflectOI));
+                    || ((! i->in_cell) && f->in_cell && coin < d.reflectOI);
     return flip;
 }
 
@@ -130,7 +137,7 @@ __device__ water_info rand_displacement(int tid, int tStep, water_info *w, GPUDa
     disp.y = d.uniform_doubles[baseU + 1];
     disp.z = d.uniform_doubles[baseU + 2];
 
-    if(in_cell(w, d)) {
+    if(w->in_cell) {
         norm *= d.in_stdev;
     }
     else {
@@ -152,6 +159,39 @@ __device__ void boundary_conditions(water_info *w, GPUData &d) {
     w->z = fmod(w->z, d.bound);
 }
 
+// PHASE ACCUMULATION FUNCTIONS
+__device__ double dipole_field(double dx, double dy, double dz, double M)
+{
+    double d2x = dx*dx;
+    double d2y = dy*dy;
+    double d2z = dz*dz;
+    double sum = __drcp_rd(d2x + d2y + d2z);
+    double multiplier = sum * sum * __dsqrt_rd(sum);
+    double ret =  M * 1e11 * (2*d2z - d2x - d2y) * multiplier;
+    return ret;
+}
+
+__device__ double computeField(water_info *w, GPUData &d) {
+    double bField = 0;
+    for(int i = 0; i < d.num_mnps; i++) {
+        double dx = w->x - dev_mnps[i].x;
+        double dy = w->y - dev_mnps[i].y;
+        double dz = w->z - dev_mnps[i].z;
+        bField += dipole_field(dx, dy, dz, dev_mnps[i].M);
+    }
+    return bField;
+}
+
+__device__ void accumulatePhase(water_info *w, GPUData &d) {
+    double B = computeField(w, d);
+    w->phase += B * 2 * M_PI * d.g * d.tau * 1e-3;
+}
+// END PHASE ACCUMULATION FUNCTIONS
+
+__device__ void carrPurcellFlip(water_info *w, int tStep) {
+
+}
+
 __device__ void sumMagnetizations(double *input, int tStep, double *target) {
 
 }
@@ -165,7 +205,7 @@ __global__ void simulateWaters(GPUData d)  {
 
     if(tid < d.num_waters) {
         // Copy water to chip memory
-        w = &(d.waters[tid]);
+        w = d.waters[tid];
         d.flags[tid] = -1;
         updateNearest(&w, d);
     }
@@ -179,23 +219,28 @@ __global__ void simulateWaters(GPUData d)  {
             w.y += disp.y;
             w.z += disp.z;
             boundary_conditions(&w, d);
-            updateNearest(&w, d);
+            //updateNearest(&w, d);
 
-            if(cell_reflect(&init, &w) || mnp_reflect(&w, ))
+            // Check cell boundary / MNP reflection
+            if(cell_reflect(&init, &w, i, d) || mnp_reflect(&w, d.num_mnps, dev_mnps))
+                w = init;
 
-            __syncthreads();
+            accumulatePhase(&w, d);
+            carrPurcellFlip(&w, i);
 
+            /*
             // Copy the magnetization to shared memory
             mags[i] = cos(w.phase);
 
+            __syncthreads();
             // Perform a memory reduction
-            sumMagnetizations(mags, i, d.magnetizations);
+            sumMagnetizations(mags, i, d.magnetizations);*/
         }
     }
 
     if(tid < d.num_waters) {
         d.flags[tid] = x;
-        d.waters[tid] = *w;
+        d.waters[tid] = w;
     }
 }
 
@@ -204,6 +249,8 @@ void finalizeGPU(GPUData &d) {
     cudaFree(d.waters);
     cudaFree(d.flags);
     cudaFree(d.uniform_doubles);
+    cudaFree(d.normal_doubles);
+    cudaFree(d.magnetizations);
 }
 
 int main(void) {
@@ -222,8 +269,14 @@ int main(void) {
     Triple* linLattice = lattice.linearLattice();
     int* lookupTable = lattice.linearLookupTable();
 
+    MNP_info *lin_mnps = new MNP_info[mnps->size()];
+    for(int i = 0; i < mnps->size(); i++) {
+        lin_mnps[i] = (*mnps)[i];
+    }
+
     GPUData d;
     setParameters(d);
+    d.num_mnps = mnps->size();
     // Seed the GPU random number generator
     d.seed = time(NULL) + rd();
 
@@ -236,8 +289,12 @@ int main(void) {
         num_cells * sizeof(Triple)));
     HANDLE_ERROR(cudaMalloc((void **) &(d.flags),
         num_water * sizeof(int)));
-    HANDLE_ERROR(cudaMalloc((void **) &d.uniform_doubles, totalUniform*sizeof(double)));
-    HANDLE_ERROR(cudaMalloc((void **) &d.normal_doubles, totalNormal*sizeof(double)));
+    HANDLE_ERROR(cudaMalloc((void **) &d.uniform_doubles,
+        totalUniform*sizeof(double)));
+    HANDLE_ERROR(cudaMalloc((void **) &d.normal_doubles,
+        totalNormal*sizeof(double)));
+    HANDLE_ERROR(cudaMalloc((void **) &(d.magnetizations),
+        num_blocks * t * sizeof(double)));
 
     // Initialize performance timers
     HANDLE_ERROR(cudaEventCreate(&start));
@@ -249,6 +306,8 @@ int main(void) {
         cudaMemcpyHostToDevice));
     HANDLE_ERROR(cudaMemcpyToSymbol(dev_lattice, linLattice,
         sizeof(Triple) * num_cells));
+    HANDLE_ERROR(cudaMemcpyToSymbol(dev_mnps, lin_mnps,
+        sizeof(MNP_info) * mnps->size()));
 
     int flags[num_water];
 
@@ -292,5 +351,6 @@ int main(void) {
     delete[] linLattice;
     delete[] lookupTable;
     delete[] waters;
+    delete[] lin_mnps;
     delete mnps;
 }
