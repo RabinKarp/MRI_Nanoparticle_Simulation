@@ -15,6 +15,8 @@
 #include "parameters.h"
 #include "fcc_diffusion.h"
 #include "gpu_random.h"
+#include "gpu_octree.h"
+#include "octree.h"
 
 #define HIGH           5000000
 #define MAX_MNPS       1000
@@ -37,30 +39,45 @@ const int num_uniform_doubles = 4; // # of uniform doubles per water per tstep
 const int num_normal_doubles = 1;  // # of normal  doubles per water per tstep
 
 __constant__ Triple dev_lattice[num_cells];
-__constant__ MNP_info dev_mnps[MAX_MNPS];
 
 struct GPUData {
+    // Related to the GPU
     int nBlocks;
 
+    // Related to the octree
     int num_mnps;
+    int min_depth;
+    MNP_info *mnps;
+    oct_node *tree;
 
+    // Morton code arrays
+    int* morton_x;
+    int* morton_y;
+    int* morton_z;
+
+    // Related to the lattice
     int num_cells;
     double cell_r;
     double bound;
     int* sphereLookup;
 
+    // Related to diffusion
     double reflectIO;
     double reflectOI;
     double in_stdev;
     double out_stdev;
 
+    // Related to the waters
     int num_waters;
     water_info* waters;
 
+    // Physical constants
     double g;
     double tau;
 
-    unsigned int seed;
+    // Related to the GPU's random number resources
+    double* uniform_doubles;
+    double* normal_doubles;
 
     /**
      * The array of magnetizations is a double array of dimension
@@ -70,12 +87,23 @@ struct GPUData {
      double* magnetizations;
      long long int timesteps;
 
-     double* uniform_doubles;
-     double* normal_doubles;
-
      // Memory for debugging purposes only
      int *flags;
 };
+
+void finalizeGPU(GPUData &d) {
+    cudaFree(d.waters);
+    cudaFree(d.flags);
+    cudaFree(d.uniform_doubles);
+    cudaFree(d.normal_doubles);
+    cudaFree(d.magnetizations);
+    cudaFree(d.mnps);
+    cudaFree(d.tree);
+
+    cudaFree(d.morton_x);
+    cudaFree(d.morton_y);
+    cudaFree(d.morton_z);
+}
 
 void setParameters(GPUData &d) {
     // Initialize constants for the GPU
@@ -93,6 +121,7 @@ void setParameters(GPUData &d) {
     d.nBlocks = num_blocks;
     d.g = g;
     d.tau = tau;
+    d.bound = bound;
 }
 
 /**
@@ -159,31 +188,8 @@ __device__ void boundary_conditions(water_info *w, GPUData &d) {
     w->z = fmod(w->z, d.bound);
 }
 
-// PHASE ACCUMULATION FUNCTIONS
-__device__ double dipole_field(double dx, double dy, double dz, double M)
-{
-    double d2x = dx*dx;
-    double d2y = dy*dy;
-    double d2z = dz*dz;
-    double sum = __drcp_rd(d2x + d2y + d2z);
-    double multiplier = sum * sum * __dsqrt_rd(sum);
-    double ret =  M * 1e11 * (2*d2z - d2x - d2y) * multiplier;
-    return ret;
-}
-
-__device__ double computeField(water_info *w, GPUData &d) {
-    double bField = 0;
-    for(int i = 0; i < d.num_mnps; i++) {
-        double dx = w->x - dev_mnps[i].x;
-        double dy = w->y - dev_mnps[i].y;
-        double dz = w->z - dev_mnps[i].z;
-        bField += dipole_field(dx, dy, dz, dev_mnps[i].M);
-    }
-    return bField;
-}
-
 __device__ void accumulatePhase(water_info *w, GPUData &d) {
-    double B = computeField(w, d);
+    double B = get_field(w, d);
     w->phase += B * 2 * M_PI * d.g * d.tau * 1e-3;
 }
 // END PHASE ACCUMULATION FUNCTIONS
@@ -244,15 +250,6 @@ __global__ void simulateWaters(GPUData d)  {
     }
 }
 
-
-void finalizeGPU(GPUData &d) {
-    cudaFree(d.waters);
-    cudaFree(d.flags);
-    cudaFree(d.uniform_doubles);
-    cudaFree(d.normal_doubles);
-    cudaFree(d.magnetizations);
-}
-
 int main(void) {
     cout << "Starting GPU Simulation..." << endl;
     FCC lattice(D_cell, D_extra, P_expr);
@@ -269,6 +266,15 @@ int main(void) {
     Triple* linLattice = lattice.linearLattice();
     int* lookupTable = lattice.linearLookupTable();
 
+    // Initialize the octree
+    uint64_t start = time(NULL);
+    Octree tree(max_product, max_g, min_g, gen, mnps);
+    uint64_t elapsed = time(NULL) - start;
+    std::cout << "Octree took " << elapsed / 60 << ":";
+    if (elapsed % 60 < 10) std::cout << "0";
+    std::cout << elapsed % 60 << " to build." << std::endl << std::endl;
+
+
     MNP_info *lin_mnps = new MNP_info[mnps->size()];
     for(int i = 0; i < mnps->size(); i++) {
         lin_mnps[i] = (*mnps)[i];
@@ -277,8 +283,7 @@ int main(void) {
     GPUData d;
     setParameters(d);
     d.num_mnps = mnps->size();
-    // Seed the GPU random number generator
-    d.seed = time(NULL) + rd();
+    initOctree(d);
 
     int totalUniform =  num_uniform_doubles * num_water * sprintSteps;
     int totalNormal = num_normal_doubles * num_water * sprintSteps;
@@ -306,8 +311,6 @@ int main(void) {
         cudaMemcpyHostToDevice));
     HANDLE_ERROR(cudaMemcpyToSymbol(dev_lattice, linLattice,
         sizeof(Triple) * num_cells));
-    HANDLE_ERROR(cudaMemcpyToSymbol(dev_mnps, lin_mnps,
-        sizeof(MNP_info) * mnps->size()));
 
     int flags[num_water];
 

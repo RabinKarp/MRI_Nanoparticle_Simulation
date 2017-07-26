@@ -56,6 +56,7 @@ typedef struct water_info {
 /* Describes a magnetic nanoparticle */
 typedef struct MNP_info
 {
+    MNP_info *next;
     double x, y, z; // coordinates of center
     double r;       // radius
     double M;       // magnetic moment
