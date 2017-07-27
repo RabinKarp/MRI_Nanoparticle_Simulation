@@ -26,7 +26,7 @@ const double border = 6;    // boundary from box where we start applying BC's
 
 /* Parameters affecting the T2 simulation */
 #undef EXPLICIT             // calculate B field explicitly?
-const int num_threads = 20; // number of threads to run T2 simulation on
+const int num_threads = 8;  // number of threads to run T2 simulation on
 const int num_runs = 1;     // number of times to run T2 simulation
 
 /* Switches for enabling or disabling debugging output files */
@@ -39,7 +39,7 @@ const int num_runs = 1;     // number of times to run T2 simulation
 
 /* Molecule and nanoparticle info */
 const int num_water = 2000;             // number of waters in simulation
-const double mnp_radius = (.1)/3;        // radius of one nanoparticle (um)
+const double mnp_radius = 0.1;        // radius of one nanoparticle (um)
 
 // Exactly ONE of the three flags below must be defined.
 #undef EXTRACELLULAR                   // MNPs intracellular, extracellular,
@@ -53,7 +53,7 @@ const double mnp_radius = (.1)/3;        // radius of one nanoparticle (um)
                                         // MNPs
 
 #ifdef UNCLUSTERED
-const double mmoment = (1.7e-15)/27;    // magnetic moment of each MNP
+const double mmoment = 1.7e-15;    // magnetic moment of each MNP
 const double scale = raw_scale;         // to account for smaller MNPs
 #elif defined CLUSTERED
 const double mnp_pack = 3;              // influences MNP cluster packing
@@ -62,7 +62,7 @@ const double scale = raw_scale;         // to account for larger MNPs
 // When throwing clustered MNPs into extracellular space around a given cell,
 // they are thrown within a sphere with radius u_throw_coeff * cell_radius
 // centered at the given cell.
-const double u_throw_coeff = 1.1;
+const double u_throw_coeff = 1.5;
 #endif
 
 const int num_mnps = 1.760e3;           // number of unclustered MNPs
@@ -71,15 +71,15 @@ const double lipid_width = 0.002;       // To account for the lipid bilayer
 
 /* Characteristics of FCC cell lattice */
 const int n = 3;                        // The lattice is n x n x n
-const double cell_r = 6.8;              // cell radius in microns
+const double cell_r = 9;                // cell radius in microns
 const double prob_labeled = 0.26;       // probability a given cell is labeled
 const double fcc_pack = 1.00;           // influences FCC packing efficiency
-const double bound = n * 2 *sqrt(2)*cell_r*fcc_pack; // full box is [0, bound]^3
+const double bound = 6 *sqrt(2)*cell_r*fcc_pack; // full box is [0, bound]^3
 
 /* Constants affecting diffusion */
 const double D_cell = .5547;            // D in micron^2 per ms
 const double D_extra = 1.6642;          // D in micron^2 per ms
-const double P_expr = 0.034;            // permeability in micron per ms
+const double P_expr = 0.01;            // permeability in micron per ms
 
 /* Time scales and step sizes */
 const double tau = 1e-6;                // time step in ms

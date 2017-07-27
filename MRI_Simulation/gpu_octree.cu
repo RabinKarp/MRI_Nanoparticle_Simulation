@@ -1,15 +1,12 @@
-#include <iostream>
-#include <cuda.h>
 #include "parameters.h"
-#include "gpu_octree.h"
 #include "cuda_helpers.h"
+#include "gpu_octree.cuh"
+#include <cuda.h>
+#include <iostream>
+#include <vector>
+#include <cuda.h>
 
-typedef struct gpu_node {
-    uint64_t mc;        // Mocton code of node; leaf if leftmost bit is set
-    B_idx child[8];     // child offsets (internal) or child B fields (leaves)
-    int numResidents;
-    int resIdx;
-} oct_node;
+using namespace std;
 
 /**
  * Initialize a GPU verison of the octree from the CPU version.
@@ -31,17 +28,17 @@ void initOctree(Octree *oct, GPUData &d) {
             localTree[i].child[j] = current.child[j];
         }
 
-        localTree[i].numResidents = current.mnps->size();
+        localTree[i].numResidents = current.resident->size();
         localTree[i].resIdx = mnp_idx;
 
-        for(int j = 0; j < current.mnps->size(); j++) {
-            localMNPs[mnp_idx] = (*(current.mnps))[j];
+        for(int j = 0; j < current.resident->size(); j++) {
+            localMNPs[mnp_idx] = (*(current.resident))[j];
             mnp_idx++;
         }
     }
 
     HANDLE_ERROR(cudaMalloc((void **) &(d.tree),
-        vec_nodes->size() * sizeof(oct_node)));
+        vec_nodes->size() * sizeof(gpu_node)));
     HANDLE_ERROR(cudaMalloc((void **) &(d.mnps),
         oct->mnps->size() * sizeof(MNP_info)));
 
@@ -54,7 +51,7 @@ void initOctree(Octree *oct, GPUData &d) {
         256 * sizeof(uint32_t)));
 
     HANDLE_ERROR(cudaMemcpy(d.tree, localTree,
-        vec_nodes->size() * sizeof(oct_node),
+        vec_nodes->size() * sizeof(gpu_node),
         cudaMemcpyHostToDevice));
     HANDLE_ERROR(cudaMemcpy(d.mnps, localMNPs,
         oct->mnps->size() * sizeof(MNP_info),
@@ -85,9 +82,9 @@ __device__ double dipole_field(double dx, double dy, double dz, double M)
     return M * 1e11 * (2*d2z - d2x - d2y) / divisor;
 }
 
-__device__ morton_code(int depth, double x, double y, double z, GPUData &d) {
+__device__ int morton_code(int depth, double x, double y, double z, GPUData &d) {
 
-    double size = pow(2, depth);
+    double size = pow(2.0, depth);
     uint32_t idx_x = floor(x / d.bound * size);
     uint32_t idx_y = floor(y / d.bound * size);
     uint32_t idx_z = floor(z / d.bound * size);
@@ -117,9 +114,9 @@ __device__ morton_code(int depth, double x, double y, double z, GPUData &d) {
     return answer;
 }
 
-__device__ oct_node* find_tree(double wx, double wy, double wz, GPUData &d)
+__device__ gpu_node* find_tree(double wx, double wy, double wz, GPUData &d)
 {
-    return d.tree + morton_code(d.min_depth, wx, wy, wz);
+    return d.tree + morton_code(d.min_depth, wx, wy, wz, d);
 }
 
 /*
@@ -128,25 +125,25 @@ __device__ oct_node* find_tree(double wx, double wy, double wz, GPUData &d)
  * code of (wx, wy, wz) at depth d + 1 and returning the last 3 bits, which
  * would encode one additional level of depth.
  */
-__device__ unsigned find_child(double wx, double wy, double wz, int d)
+__device__ unsigned find_child(double wx, double wy, double wz, int d, GPUData &data)
 {
-    return morton_code(d + 1, wx, wy, wz) & 7;
+    return morton_code(d + 1, wx, wy, wz, data) & 7;
 }
 
 // TODO: Check this function!
-__device__ oct_node* find_node(oct_node *n, double wx, double wy, double wz, int d) {
+__device__ gpu_node* find_node(gpu_node *n, double wx, double wy, double wz, int d, GPUData &data) {
     while( ! (n->mc >> 63)) {
         // otherwise, navigate to the appropriate child and recurse
-        unsigned child_no = find_child(wx, wy, wz, d);
+        unsigned child_no = find_child(wx, wy, wz, d, data);
         d += 1;
         n += n->child[child_no].idx;
     }
     return n;
 }
 
-__device__ oct_node* get_voxel(water_info *w, GPUData &d) {
+__device__ gpu_node* get_voxel(water_info *w, GPUData &d) {
     double wx = w->x, wy = w->y, wz = w->z;
-    return find_node(find_tree(wx, wy, wz, d), wx, wy, wz, d.min_depth);
+    return find_node(find_tree(wx, wy, wz, d), wx, wy, wz, d.min_depth, d);
 }
 
 /**
@@ -154,22 +151,20 @@ __device__ oct_node* get_voxel(water_info *w, GPUData &d) {
  */
 __device__ double get_field(water_info *w, GPUData &d) {
     double wx = w->x, wy = w->y, wz = w->z;
-    oct_node *leaf = get_voxel(w, d);
-    __syncthreads();
+    gpu_node *leaf = get_voxel(w, d);
 
     uint64_t depth = 0, mc = (leaf->mc << 1) >> 1;
     while (mc >>= 3) depth++;
 
     // use Morton code's depth to find child index to find value of B to return
-    unsigned child_no = find_child(wx, wy, wz, depth);
+    unsigned child_no = find_child(wx, wy, wz, depth, d);
     double B = (double)leaf->child[child_no].B;
 
     // add in contributions from resident MNPs zeroed out during construction
-    for(int i = leaf->resIdx; i < leaf->resIdx + leaf->num_mnps; i++) {
+    for(int i = leaf->resIdx; i < leaf->resIdx + leaf->numResidents; i++) {
         MNP_info *np = d.mnps + i;
         B += dipole_field(wx - np->x, wy - np->y, wz - np->z, np->M);
     }
-    __syncthreads();
 
     return B;
 }

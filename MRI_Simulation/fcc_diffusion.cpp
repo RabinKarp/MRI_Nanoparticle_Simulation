@@ -366,7 +366,7 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
                         double norm;
 
 #ifdef INTRACELLULAR
-                        norm = gen.rand_pos_double() * (cell_r - mnp_radius);
+                        norm = gen.rand_pos_double() * (cell_r);
 #elif defined EXTRACELLULAR
                         norm = cell_r * (1 + gen.rand_pos_double()
                             * (u_throw_coeff - 1));
@@ -378,12 +378,6 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
                         x = loc.x + fcc[i][0];
                         y = loc.y + fcc[i][1];
                         z = loc.z + fcc[i][2];
-
-                        // Check if the MNP overlaps with any cell in the
-                        // lattice
-                        if(checkLatticeOverlap(x, y, z, r)) {
-                          invalid = true;
-                        }
 
                         // Check if the MNP is contained by any cell
                         // other than the cell around which it is thrown -

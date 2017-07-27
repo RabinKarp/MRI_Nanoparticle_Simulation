@@ -1,4 +1,4 @@
-CXX=icpc
+CXX=g++
 
 OBJS = rand_walk.o fcc_diffusion.o octree.o
 

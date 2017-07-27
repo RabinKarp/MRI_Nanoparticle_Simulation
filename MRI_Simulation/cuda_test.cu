@@ -1,3 +1,7 @@
+#define HIGH           5000000
+#define MAX_MNPS       1000
+#define M_PI           3.14159265358979323846
+
 #include "cuda_helpers.h"
 
 #include <stdio.h>
@@ -6,26 +10,19 @@
 #include <windows.h>
 #include <stdlib.h>
 
+#include <vector>
 #include <fstream>
 #include <thread>
 #include <iostream>
-#include <mutex>
-#include <cassert>
-#include <math.h>
 #include "parameters.h"
 #include "fcc_diffusion.h"
 #include "gpu_random.h"
-#include "gpu_octree.h"
 #include "octree.h"
-
-#define HIGH           5000000
-#define MAX_MNPS       1000
-#define M_PI           3.14159265358979323846
 
 using namespace std;
 /**
  *  nvcc cuda_test.cu fcc_diffusion.cpp rand_walk.cpp octree.cpp -arch=sm_61 -lcurand -ccbin "
-C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\bin\amd64_x86"
+ * C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\bin\amd64_x86"
  */
 
 #define threads_per_block 256
@@ -40,56 +37,170 @@ const int num_normal_doubles = 1;  // # of normal  doubles per water per tstep
 
 __constant__ Triple dev_lattice[num_cells];
 
-struct GPUData {
-    // Related to the GPU
-    int nBlocks;
+//==============================================================================
 
-    // Related to the octree
-    int num_mnps;
-    int min_depth;
-    MNP_info *mnps;
-    oct_node *tree;
+/**
+ * Initialize a GPU verison of the octree from the CPU version.
+ */
+void initOctree(Octree *oct, GPUData &d) {
+    // Initialize octree parameters
 
-    // Morton code arrays
-    int* morton_x;
-    int* morton_y;
-    int* morton_z;
+    vector<oct_node> *vec_nodes = oct->space;
 
-    // Related to the lattice
-    int num_cells;
-    double cell_r;
-    double bound;
-    int* sphereLookup;
+    gpu_node *localTree = new gpu_node[vec_nodes->size()];
+    MNP_info *localMNPs = new MNP_info[oct->mnps->size()];
 
-    // Related to diffusion
-    double reflectIO;
-    double reflectOI;
-    double in_stdev;
-    double out_stdev;
+    int mnp_idx = 0;
+    for(int i = 0; i < vec_nodes->size(); i++) {
+        oct_node current = (*vec_nodes)[i];
+        localTree[i].mc = current.mc;
 
-    // Related to the waters
-    int num_waters;
-    water_info* waters;
+        for(int j = 0; j < 8; j++) {
+            localTree[i].child[j] = current.child[j];
+        }
 
-    // Physical constants
-    double g;
-    double tau;
+        localTree[i].numResidents = current.resident->size();
+        localTree[i].resIdx = mnp_idx;
 
-    // Related to the GPU's random number resources
-    double* uniform_doubles;
-    double* normal_doubles;
+        for(int j = 0; j < current.resident->size(); j++) {
+            localMNPs[mnp_idx] = (*(current.resident))[j];
+            mnp_idx++;
+        }
+    }
 
-    /**
-     * The array of magnetizations is a double array of dimension
-     * (t * num_blocks). Each block writes to a unique portion of the shared
-     * global memory.
-     */
-     double* magnetizations;
-     long long int timesteps;
+    HANDLE_ERROR(cudaMalloc((void **) &(d.tree),
+        vec_nodes->size() * sizeof(gpu_node)));
+    HANDLE_ERROR(cudaMalloc((void **) &(d.mnps),
+        oct->mnps->size() * sizeof(MNP_info)));
 
-     // Memory for debugging purposes only
-     int *flags;
-};
+    // Allocate arrays for morton codes
+    HANDLE_ERROR(cudaMalloc((void **) &(d.morton_x),
+        256 * sizeof(uint32_t)));
+    HANDLE_ERROR(cudaMalloc((void **) &(d.morton_y),
+        256 * sizeof(uint32_t)));
+    HANDLE_ERROR(cudaMalloc((void **) &(d.morton_z),
+        256 * sizeof(uint32_t)));
+
+    HANDLE_ERROR(cudaMemcpy(d.tree, localTree,
+        vec_nodes->size() * sizeof(gpu_node),
+        cudaMemcpyHostToDevice));
+    HANDLE_ERROR(cudaMemcpy(d.mnps, localMNPs,
+        oct->mnps->size() * sizeof(MNP_info),
+        cudaMemcpyHostToDevice));
+
+    // Copy over the Morton code arrays
+    HANDLE_ERROR(cudaMemcpy(d.morton_x, morton_x,
+        256 * sizeof(uint32_t),
+        cudaMemcpyHostToDevice));
+    HANDLE_ERROR(cudaMemcpy(d.morton_y, morton_y,
+        256 * sizeof(uint32_t),
+        cudaMemcpyHostToDevice));
+    HANDLE_ERROR(cudaMemcpy(d.morton_z, morton_z,
+        256 * sizeof(uint32_t),
+        cudaMemcpyHostToDevice));
+
+    delete[] localTree;
+    delete[] localMNPs;
+}
+
+__device__ double dipole_field(double dx, double dy, double dz, double M)
+{
+    double d2x = dx*dx;
+    double d2y = dy*dy;
+    double d2z = dz*dz;
+    double sum = d2x + d2y + d2z;
+    double divisor = sum * sum * sqrt(sum);
+    return M * 1e11 * (2*d2z - d2x - d2y) / divisor;
+}
+
+__device__ int morton_code(int depth, double x, double y, double z, GPUData &d) {
+
+    double size = pow(2.0, depth);
+    uint32_t idx_x = floor(x / d.bound * size);
+    uint32_t idx_y = floor(y / d.bound * size);
+    uint32_t idx_z = floor(z / d.bound * size);
+    uint64_t answer = 0;
+    // start by shifting the third byte, since we only look @ the first 21 bits
+    if (depth > 16)
+    {
+        answer |=   d.morton_z[(idx_z >> 16) & 0xFF ] |
+                    d.morton_y[(idx_y >> 16) & 0xFF ] |
+                    d.morton_x[(idx_x >> 16) & 0xFF ];
+        answer <<= 24;
+    }
+
+    // shift second byte
+    if (depth > 8)
+    {
+        answer |=   d.morton_z[(idx_z >> 8) & 0xFF ] |
+                    d.morton_y[(idx_y >> 8) & 0xFF ] |
+                    d.morton_x[(idx_x >> 8) & 0xFF ];
+        answer <<= 24;
+    }
+
+    // shift first byte
+    answer |=   d.morton_z[(idx_z) & 0xFF ] |
+                d.morton_y[(idx_y) & 0xFF ] |
+                d.morton_x[(idx_x) & 0xFF ];
+    return answer;
+}
+
+__device__ gpu_node* find_tree(double wx, double wy, double wz, GPUData &d)
+{
+    return d.tree + morton_code(d.min_depth, wx, wy, wz, d);
+}
+
+/*
+ * Helper function to find the child index of a parent node at depth d that
+ * holds the water molecule at (wx, wy, wz). This is done by taking the Morton
+ * code of (wx, wy, wz) at depth d + 1 and returning the last 3 bits, which
+ * would encode one additional level of depth.
+ */
+__device__ unsigned find_child(double wx, double wy, double wz, int d, GPUData &data)
+{
+    return morton_code(d + 1, wx, wy, wz, data) & 7;
+}
+
+// TODO: Check this function!
+__device__ gpu_node* find_node(gpu_node *n, double wx, double wy, double wz, int d, GPUData &data) {
+    while( ! (n->mc >> 63)) {
+        // otherwise, navigate to the appropriate child and recurse
+        unsigned child_no = find_child(wx, wy, wz, d, data);
+        d += 1;
+        n += n->child[child_no].idx;
+    }
+    return n;
+}
+
+__device__ gpu_node* get_voxel(water_info *w, GPUData &d) {
+    double wx = w->x, wy = w->y, wz = w->z;
+    return find_node(find_tree(wx, wy, wz, d), wx, wy, wz, d.min_depth, d);
+}
+
+/**
+ * Returns the B field at the location of a particular water molecule
+ */
+__device__ double get_field(water_info *w, GPUData &d) {
+    double wx = w->x, wy = w->y, wz = w->z;
+    gpu_node *leaf = get_voxel(w, d);
+
+    uint64_t depth = 0, mc = (leaf->mc << 1) >> 1;
+    while (mc >>= 3) depth++;
+
+    // use Morton code's depth to find child index to find value of B to return
+    unsigned child_no = find_child(wx, wy, wz, depth, d);
+    double B = (double)leaf->child[child_no].B;
+
+    // add in contributions from resident MNPs zeroed out during construction
+    for(int i = leaf->resIdx; i < leaf->resIdx + leaf->numResidents; i++) {
+        MNP_info *np = d.mnps + i;
+        B += dipole_field(wx - np->x, wy - np->y, wz - np->z, np->M);
+    }
+
+    return B;
+}
+
+//==============================================================================
 
 void finalizeGPU(GPUData &d) {
     cudaFree(d.waters);
@@ -183,9 +294,9 @@ __device__ water_info rand_displacement(int tid, int tStep, water_info *w, GPUDa
 }
 
 __device__ void boundary_conditions(water_info *w, GPUData &d) {
-    w->x = fmod(w->x, d.bound);
-    w->y = fmod(w->y, d.bound);
-    w->z = fmod(w->z, d.bound);
+    w->x = fmod(w->x + d.bound, d.bound);
+    w->y = fmod(w->y + d.bound, d.bound);
+    w->z = fmod(w->z + d.bound, d.bound);
 }
 
 __device__ void accumulatePhase(water_info *w, GPUData &d) {
@@ -228,7 +339,7 @@ __global__ void simulateWaters(GPUData d)  {
             //updateNearest(&w, d);
 
             // Check cell boundary / MNP reflection
-            if(cell_reflect(&init, &w, i, d) || mnp_reflect(&w, d.num_mnps, dev_mnps))
+            if(cell_reflect(&init, &w, i, d))
                 w = init;
 
             accumulatePhase(&w, d);
@@ -238,9 +349,9 @@ __global__ void simulateWaters(GPUData d)  {
             // Copy the magnetization to shared memory
             mags[i] = cos(w.phase);
 
-            __syncthreads();
             // Perform a memory reduction
-            sumMagnetizations(mags, i, d.magnetizations);*/
+            sumMagnetizations(mags, i, d.magnetizations);
+            */
         }
     }
 
@@ -267,24 +378,20 @@ int main(void) {
     int* lookupTable = lattice.linearLookupTable();
 
     // Initialize the octree
-    uint64_t start = time(NULL);
+    double max_product = 2e-6, max_g = 5, min_g = .002;
+    uint64_t sTime = time(NULL);
     Octree tree(max_product, max_g, min_g, gen, mnps);
-    uint64_t elapsed = time(NULL) - start;
-    std::cout << "Octree took " << elapsed / 60 << ":";
-    if (elapsed % 60 < 10) std::cout << "0";
-    std::cout << elapsed % 60 << " to build." << std::endl << std::endl;
-
-
-    MNP_info *lin_mnps = new MNP_info[mnps->size()];
-    for(int i = 0; i < mnps->size(); i++) {
-        lin_mnps[i] = (*mnps)[i];
-    }
+    uint64_t eTime = time(NULL) - sTime;
+    std::cout << "Octree took " << eTime / 60 << ":";
+    if (eTime % 60 < 10) std::cout << "0";
+    std::cout << eTime % 60 << " to build." << std::endl << std::endl;
 
     GPUData d;
     setParameters(d);
     d.num_mnps = mnps->size();
-    initOctree(d);
+    //initOctree(&tree, d);
 
+    cout << "Allocated GPU Octree!" << endl;
     int totalUniform =  num_uniform_doubles * num_water * sprintSteps;
     int totalNormal = num_normal_doubles * num_water * sprintSteps;
     // Allocations: Perform all allocations here
@@ -317,7 +424,7 @@ int main(void) {
     cout << "Kernel prepped!" << endl;
 
     // Run the kernel in sprints due to memory limits and timeout issues
-    for(int i = 0; i < 1; i++) {
+    for(int i = 0; i < 10; i++) {
         cout << "Starting sprint " << (i+1) << "." << endl;
         getUniformDoubles(totalUniform, d.uniform_doubles);
         getNormalDoubles(totalNormal, d.normal_doubles);
@@ -354,6 +461,5 @@ int main(void) {
     delete[] linLattice;
     delete[] lookupTable;
     delete[] waters;
-    delete[] lin_mnps;
     delete mnps;
 }
