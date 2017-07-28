@@ -16,7 +16,7 @@ typedef struct gpu_node {
     uint64_t mc;        // Mocton code of node; leaf if leftmost bit is set
     B_idx child[8];     // child offsets (internal) or child B fields (leaves)
     int numResidents;
-    int resIdx;
+    MNP_info* resident;
 } gpu_node;
 
 typedef struct GPUData {
@@ -26,13 +26,15 @@ typedef struct GPUData {
     // Related to the octree
     int num_mnps;
     int min_depth;
-    MNP_info *mnps;
-    gpu_node *tree;
+    int max_depth;
+    gpu_node **tree;
+    int *sizes;
+    int arr_size;
 
     // Morton code arrays
-    int* morton_x;
-    int* morton_y;
-    int* morton_z;
+    uint32_t* morton_x;
+    uint32_t* morton_y;
+    uint32_t* morton_z;
 
     // Related to the lattice
     int num_cells;
@@ -70,7 +72,7 @@ typedef struct GPUData {
      int *flags;
 } GPUData;
 
-static void HandleError( cudaError_t err,
+/*static void HandleError( cudaError_t err,
                          const char *file,
                          int line ) {
     if (err != cudaSuccess) {
@@ -86,6 +88,6 @@ static void HandleError( cudaError_t err,
 #define HANDLE_NULL( a ) {if (a == NULL) { \
                             printf( "Host memory failed in %s at line %d\n", \
                                     __FILE__, __LINE__ ); \
-                            exit( EXIT_FAILURE );}}
+                            exit( EXIT_FAILURE );}}*/
 
 #endif

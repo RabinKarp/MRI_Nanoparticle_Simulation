@@ -39,6 +39,8 @@ class Octree
     Octree(double max_product, double max_g, double min_g, XORShift<> &gen,\
             std::vector<MNP_info> *mnps);
     ~Octree();
+    
+    int min_depth, max_depth;
 
     /* The octree itself, an array of all 8^min_depth vectorized subtrees */
     std::vector<oct_node> *space;
@@ -53,7 +55,6 @@ class Octree
     double get_field(water_info *w, oct_node *leaf=NULL);
 
     private:
-    int min_depth, max_depth;
 
     /* Helpers for the constructor */
     void init_subtrees(int thread_no, double max_product, double min_g);

@@ -14,6 +14,7 @@
 #include <fstream>
 #include <thread>
 #include <iostream>
+#include "math.h"
 #include "parameters.h"
 #include "fcc_diffusion.h"
 #include "gpu_random.h"
