@@ -2,6 +2,7 @@
 #define CUDA_HELPERS
 
 #include <cstdio>
+#include <vector>
 #include "rand_walk.h"
 #include "octree.h"
 
@@ -28,8 +29,11 @@ typedef struct GPUData {
     int min_depth;
     int max_depth;
     gpu_node **tree;
+    gpu_node **localPointers;
     int *sizes;
     int arr_size;
+
+    std::vector<void*> *addresses;
 
     // Morton code arrays
     uint32_t* morton_x;
@@ -72,7 +76,7 @@ typedef struct GPUData {
      int *flags;
 } GPUData;
 
-/*static void HandleError( cudaError_t err,
+static void HandleError( cudaError_t err,
                          const char *file,
                          int line ) {
     if (err != cudaSuccess) {
@@ -88,6 +92,6 @@ typedef struct GPUData {
 #define HANDLE_NULL( a ) {if (a == NULL) { \
                             printf( "Host memory failed in %s at line %d\n", \
                                     __FILE__, __LINE__ ); \
-                            exit( EXIT_FAILURE );}}*/
+                            exit( EXIT_FAILURE );}}
 
 #endif

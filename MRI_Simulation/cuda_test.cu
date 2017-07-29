@@ -38,83 +38,33 @@ const int num_normal_doubles = 1;  // # of normal  doubles per water per tstep
 
 __constant__ Triple dev_lattice[num_cells];
 
-//==============================================================================
-
-/**
- * Initialize a GPU verison of the octree from the CPU version.
- */
-void initOctree(Octree *oct, GPUData &d) {
-    // Initialize octree parameters
-
-    vector<oct_node> *vec_nodes = oct->space;
-
-    gpu_node *localTree = new gpu_node[vec_nodes->size()];
-    MNP_info *localMNPs = new MNP_info[oct->mnps->size()];
-
-    int mnp_idx = 0;
-    for(int i = 0; i < vec_nodes->size(); i++) {
-        oct_node current = (*vec_nodes)[i];
-        localTree[i].mc = current.mc;
-
-        for(int j = 0; j < 8; j++) {
-            localTree[i].child[j] = current.child[j];
-        }
-
-        localTree[i].numResidents = current.resident->size();
-        localTree[i].resIdx = mnp_idx;
-
-        for(int j = 0; j < current.resident->size(); j++) {
-            localMNPs[mnp_idx] = (*(current.resident))[j];
-            mnp_idx++;
-        }
-    }
-
-    HANDLE_ERROR(cudaMalloc((void **) &(d.tree),
-        vec_nodes->size() * sizeof(gpu_node)));
-    HANDLE_ERROR(cudaMalloc((void **) &(d.mnps),
-        oct->mnps->size() * sizeof(MNP_info)));
-
-    // Allocate arrays for morton codes
-    HANDLE_ERROR(cudaMalloc((void **) &(d.morton_x),
-        256 * sizeof(uint32_t)));
-    HANDLE_ERROR(cudaMalloc((void **) &(d.morton_y),
-        256 * sizeof(uint32_t)));
-    HANDLE_ERROR(cudaMalloc((void **) &(d.morton_z),
-        256 * sizeof(uint32_t)));
-
-    HANDLE_ERROR(cudaMemcpy(d.tree, localTree,
-        vec_nodes->size() * sizeof(gpu_node),
-        cudaMemcpyHostToDevice));
-    HANDLE_ERROR(cudaMemcpy(d.mnps, localMNPs,
-        oct->mnps->size() * sizeof(MNP_info),
-        cudaMemcpyHostToDevice));
-
-    // Copy over the Morton code arrays
-    HANDLE_ERROR(cudaMemcpy(d.morton_x, morton_x,
-        256 * sizeof(uint32_t),
-        cudaMemcpyHostToDevice));
-    HANDLE_ERROR(cudaMemcpy(d.morton_y, morton_y,
-        256 * sizeof(uint32_t),
-        cudaMemcpyHostToDevice));
-    HANDLE_ERROR(cudaMemcpy(d.morton_z, morton_z,
-        256 * sizeof(uint32_t),
-        cudaMemcpyHostToDevice));
-
-    delete[] localTree;
-    delete[] localMNPs;
+inline void* cudaAllocate(long long int size) {
+    void *ptr;
+    HANDLE_ERROR(cudaMalloc((void **) &ptr, size));
+    return ptr;
 }
+
+inline void copyToDevice(void* dest, void* source, long long int size) {
+    HANDLE_ERROR(cudaMemcpy(dest, source,
+        size,
+        cudaMemcpyHostToDevice));
+}
+
+inline void copyToHost(void* dest, void* source, long long int size) {
+    HANDLE_ERROR(cudaMemcpy(dest, source,
+        size,
+        cudaMemcpyDeviceToHost));
+}
+
+//==============================================================================
 
 __device__ double dipole_field(double dx, double dy, double dz, double M)
 {
-    double d2x = dx*dx;
-    double d2y = dy*dy;
-    double d2z = dz*dz;
-    double sum = d2x + d2y + d2z;
-    double divisor = sum * sum * sqrt(sum);
-    return M * 1e11 * (2*d2z - d2x - d2y) / divisor;
+    double divisor = pow(NORMSQ(dx, dy, dz), 2.5);
+    return M * 1e11 * (2*dz*dz - dx*dx - dy*dy) / divisor;
 }
 
-__device__ int morton_code(int depth, double x, double y, double z, GPUData &d) {
+__device__ uint64_t morton_code(int depth, double x, double y, double z, GPUData &d) {
 
     double size = pow(2.0, depth);
     uint32_t idx_x = floor(x / d.bound * size);
@@ -143,10 +93,11 @@ __device__ int morton_code(int depth, double x, double y, double z, GPUData &d) 
     answer |=   d.morton_z[(idx_z) & 0xFF ] |
                 d.morton_y[(idx_y) & 0xFF ] |
                 d.morton_x[(idx_x) & 0xFF ];
+
     return answer;
 }
 
-__device__ gpu_node* find_tree(double wx, double wy, double wz, GPUData &d)
+__device__ gpu_node** find_tree(double wx, double wy, double wz, GPUData &d)
 {
     return d.tree + morton_code(d.min_depth, wx, wy, wz, d);
 }
@@ -164,18 +115,18 @@ __device__ unsigned find_child(double wx, double wy, double wz, int d, GPUData &
 
 // TODO: Check this function!
 __device__ gpu_node* find_node(gpu_node *n, double wx, double wy, double wz, int d, GPUData &data) {
-    while( ! (n->mc >> 63)) {
-        // otherwise, navigate to the appropriate child and recurse
-        unsigned child_no = find_child(wx, wy, wz, d, data);
-        d += 1;
-        n += n->child[child_no].idx;
-    }
-    return n;
+    // base case -- node is a leaf
+    if (n->mc >> 63)
+        return n;
+
+    // otherwise, navigate to the appropriate child and recurse
+    unsigned child_no = find_child(wx, wy, wz, d, data);
+    return find_node(n + n->child[child_no].idx, wx, wy, wz, d + 1, data);
 }
 
 __device__ gpu_node* get_voxel(water_info *w, GPUData &d) {
     double wx = w->x, wy = w->y, wz = w->z;
-    return find_node(find_tree(wx, wy, wz, d), wx, wy, wz, d.min_depth, d);
+    return find_node(*(find_tree(wx, wy, wz, d)), wx, wy, wz, d.min_depth, d);
 }
 
 /**
@@ -193,14 +144,110 @@ __device__ double get_field(water_info *w, GPUData &d) {
     double B = (double)leaf->child[child_no].B;
 
     // add in contributions from resident MNPs zeroed out during construction
-    for(int i = leaf->resIdx; i < leaf->resIdx + leaf->numResidents; i++) {
-        MNP_info *np = d.mnps + i;
+    for(int i = 0; i < leaf->numResidents; i++) {
+        MNP_info *np = leaf->resident + i;
         B += dipole_field(wx - np->x, wy - np->y, wz - np->z, np->M);
     }
 
     return B;
 }
 
+/**
+ * Initialize a GPU verison of the octree from the CPU version.
+ */
+void initOctree(Octree *oct, GPUData &d) {
+    // Initialize octree parameters
+    d.min_depth = oct->min_depth;
+    d.max_depth = oct->max_depth;
+    d.addresses = new std::vector<void*>();
+
+    vector<oct_node> *vec_nodes = oct->space;
+    vector<MNP_info> &vec_mnps = *(oct->mnps);
+
+    int arr_size = (int) pow(8, d.min_depth);
+    d.arr_size = arr_size;
+
+
+    gpu_node** localTree = new gpu_node*[arr_size];
+    gpu_node** localPointers = new gpu_node*[arr_size];
+    d.sizes = new int[arr_size];
+
+    bool* checked = new bool[vec_mnps.size()];
+
+    for(int i = 0; i < arr_size; i++) {
+        if(vec_nodes + i) {
+          vector<oct_node> &current = vec_nodes[i];
+          localTree[i] = new gpu_node[current.size()];
+
+          for(int j = 0; j < current.size(); j++) {
+              localTree[i][j].mc = current[j].mc;
+
+              for(int k = 0; k < 8; k++) {
+                  localTree[i][j].child[k] = current[j].child[k];
+              }
+
+              if(current[j].resident) {
+                  localTree[i][j].numResidents = current[j].resident->size();
+
+                  // This will become a device pointer
+                  localTree[i][j].resident = (MNP_info*) cudaAllocate(sizeof(MNP_info) * localTree[i][j].numResidents);
+                  d.addresses->push_back((void*) localTree[i][j].resident);
+                  // Copy MNPs to device
+                  copyToDevice((void *) localTree[i][j].resident,
+                      (void*) current[j].resident->data(),
+                      sizeof(MNP_info) * localTree[i][j].numResidents);
+              }
+              else {
+                  localTree[i][j].numResidents = 0;
+                  localTree[i][j].resident = nullptr;
+              }
+          }
+          // Store the subtree size locally
+          d.sizes[i] = current.size();
+          // Now copy the entire subtree to the device, storing in the local pointers struct
+          localPointers[i] = (gpu_node *) cudaAllocate(sizeof(gpu_node) * current.size());
+          d.addresses->push_back((void*) localPointers[i]);
+          copyToDevice((void*)localPointers[i], (void*) localTree[i], sizeof(gpu_node) * current.size());
+        }
+
+        // Now copy the entire tree into memory
+        d.tree = (gpu_node**) cudaAllocate(sizeof(gpu_node**) * arr_size);
+        copyToDevice((void*) d.tree, (void*) localPointers, sizeof(gpu_node**) * arr_size);
+    }
+
+    d.morton_x = (uint32_t*) cudaAllocate(256 * sizeof(uint32_t));
+    d.morton_y = (uint32_t*) cudaAllocate(256 * sizeof(uint32_t));
+    d.morton_z = (uint32_t*) cudaAllocate(256 * sizeof(uint32_t));
+
+    copyToDevice((void*) d.morton_x,(void*) morton_x, 256 * sizeof(uint32_t));
+    copyToDevice((void*) d.morton_y,(void*) morton_y, 256 * sizeof(uint32_t));
+    copyToDevice((void*) d.morton_z,(void*) morton_z, 256 * sizeof(uint32_t));
+
+    for(int i = 0; i < arr_size; i++) {
+        delete[] localTree[i];
+    }
+}
+
+void destroyTree(GPUData &d) {
+    // TODO: Fix memory cleanup here
+
+    cudaFree(d.tree);
+
+    for(std::vector<void*>::iterator it = d.addresses->begin(); it != d.addresses->end(); it++) {
+        cudaFree(*it);
+    }
+
+    cout << "Tree freed!" << endl;
+
+    // Free the morton code arrays
+    cudaFree(d.morton_x);
+    cudaFree(d.morton_y);
+    cudaFree(d.morton_z);
+
+    // Host pointer, can call delete
+    delete[] d.sizes;
+    delete d.addresses;
+}
 //==============================================================================
 
 void finalizeGPU(GPUData &d) {
@@ -209,12 +256,8 @@ void finalizeGPU(GPUData &d) {
     cudaFree(d.uniform_doubles);
     cudaFree(d.normal_doubles);
     cudaFree(d.magnetizations);
-    cudaFree(d.mnps);
-    cudaFree(d.tree);
 
-    cudaFree(d.morton_x);
-    cudaFree(d.morton_y);
-    cudaFree(d.morton_z);
+    destroyTree(d);
 }
 
 void setParameters(GPUData &d) {
@@ -390,7 +433,7 @@ int main(void) {
     GPUData d;
     setParameters(d);
     d.num_mnps = mnps->size();
-    //initOctree(&tree, d);
+    initOctree(&tree, d);
 
     cout << "Allocated GPU Octree!" << endl;
     int totalUniform =  num_uniform_doubles * num_water * sprintSteps;
@@ -425,7 +468,7 @@ int main(void) {
     cout << "Kernel prepped!" << endl;
 
     // Run the kernel in sprints due to memory limits and timeout issues
-    for(int i = 0; i < 10; i++) {
+    for(int i = 0; i < 100; i++) {
         cout << "Starting sprint " << (i+1) << "." << endl;
         getUniformDoubles(totalUniform, d.uniform_doubles);
         getNormalDoubles(totalNormal, d.normal_doubles);
@@ -455,9 +498,9 @@ int main(void) {
         cout << "Success State: " << success << endl << "===========" << endl;
     }
 
-    finalizeGPU(d);
     HANDLE_ERROR(cudaEventDestroy(start));
     HANDLE_ERROR(cudaEventDestroy(stop));
+    finalizeGPU(d);
 
     delete[] linLattice;
     delete[] lookupTable;
