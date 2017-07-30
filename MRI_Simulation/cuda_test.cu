@@ -138,9 +138,8 @@ __device__ gpu_node* get_voxel(water_info *w, GPUData &d) {
 /**
  * Returns the B field at the location of a particular water molecule
  */
-__device__ double get_field(water_info *w, GPUData &d) {
+__device__ double get_field(water_info *w, gpu_node* leaf, GPUData &d) {
     double wx = w->x, wy = w->y, wz = w->z;
-    gpu_node *leaf = get_voxel(w, d);
 
     uint64_t depth = 0, mc = (leaf->mc << 1) >> 1;
     while (mc >>= 3) depth++;
@@ -317,8 +316,20 @@ __device__ bool cell_reflect(water_info *i, water_info *f, int tStep, GPUData &d
     return flip;
 }
 
-__device__ bool mnp_reflect(water_info *w, int num_mnps, MNP_info *mnps) {
-    return false; // TODO: Fix this!!!
+__device__ bool mnp_reflect(water_info *w, MNP_info *mnp, int num_mnps, GPUData &d) {
+    bool retValue = false;
+
+    for(int i = 0; i < num_mnps; i++) {
+        MNP_info* m = mnp + i;
+        double dx = m->x - w->x;
+        double dy = m->y - w->y;
+        double dz = m->z - w->z;
+
+        if(NORMSQ(dx, dy, dz) < (m->r * m->r))
+            retValue = true;
+    }
+
+    return retValue;
 }
 
 __device__ water_info rand_displacement(int tid, int tStep, water_info *w, GPUData &d) {
@@ -352,8 +363,8 @@ __device__ void boundary_conditions(water_info *w, GPUData &d) {
     w->z = fmod(w->z + d.bound, d.bound);
 }
 
-__device__ void accumulatePhase(water_info *w, GPUData &d) {
-    double B = get_field(w, d);
+__device__ void accumulatePhase(water_info *w, gpu_node* voxel, GPUData &d) {
+    double B = get_field(w, voxel, d);
     w->phase += B * 2 * M_PI * d.g * d.tau * 1e-3;
 }
 // END PHASE ACCUMULATION FUNCTIONS
@@ -381,6 +392,9 @@ __global__ void simulateWaters(GPUData d)  {
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
     int startTime = *d.time;
     water_info w;
+    gpu_node *voxel = get_voxel(&w, d);
+    gpu_node *oldVoxel;
+
     int x = 0;
 
     if(tid < d.num_waters) {
@@ -395,21 +409,26 @@ __global__ void simulateWaters(GPUData d)  {
         if(tid < d.num_waters) {
             x++;
             water_info init = w;
+            oldVoxel = voxel;
+
             water_info disp = rand_displacement(tid, i, &w, d);
             w.x += disp.x;
             w.y += disp.y;
             w.z += disp.z;
             boundary_conditions(&w, d);
             updateNearest(&w, d);
+            voxel = get_voxel(&w, d);
 
             // Check cell boundary / MNP reflection
 
-            if(cell_reflect(&init, &w, i, d))
+            if(cell_reflect(&init, &w, i, d) || mnp_reflect(&w, voxel->resident, voxel->numResidents,d)) {
                 w = init;
+                voxel = oldVoxel;
+            }
 
-            accumulatePhase(&w, d);
+            accumulatePhase(&w, voxel, d);
 
-            if((startTime + i) % (2 * d.tcp) == d.tcp) {
+            if(((startTime + i) % (2 * d.tcp)) == d.tcp) {
                 w.phase *= -1;
             }
 
@@ -513,7 +532,7 @@ int main(void) {
 
     // Run the kernel in sprints due to memory limits and timeout issues
     double time = 0;
-    for(int i = 0; i < 1500; i++) {
+    for(int i = 0; i < 1000; i++) {
         cout << "Starting sprint " << (i+1) << "." << endl;
         getUniformDoubles(totalUniform, d.uniform_doubles);
         getNormalDoubles(totalNormal, d.normal_doubles);
