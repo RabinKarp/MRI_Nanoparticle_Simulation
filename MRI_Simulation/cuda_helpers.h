@@ -52,6 +52,11 @@ typedef struct GPUData {
     double in_stdev;
     double out_stdev;
 
+    // Related to simulation time
+    int tcp;
+    int pfreq;
+    int* time;
+
     // Related to the waters
     int num_waters;
     water_info* waters;

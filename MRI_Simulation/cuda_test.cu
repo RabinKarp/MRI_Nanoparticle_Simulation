@@ -26,10 +26,16 @@ using namespace std;
  * C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\bin\amd64_x86"
  */
 
-#define threads_per_block 256
+ /*
+  * nvcc cuda_test.cu fcc_diffusion.cpp rand_walk.cpp octree.cpp -arch=s
+  * m_61 -lcurand -ccbin "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\bin\amd64_x86"
+  */
+
+#define threads_per_block 32
 const int num_blocks = (num_water + threads_per_block - 1) / threads_per_block;
 
 const double g = 42.5781e6;             // gyromagnetic ratio in MHz/T
+const int pfreq = (int)(1e-3/tau);      // print net magnetization every 1us
 
 // Each kernel execution handles AT MOST this many timesteps
 const int sprintSteps = 10000;
@@ -256,6 +262,7 @@ void finalizeGPU(GPUData &d) {
     cudaFree(d.uniform_doubles);
     cudaFree(d.normal_doubles);
     cudaFree(d.magnetizations);
+    cudaFree(d.time);
 
     destroyTree(d);
 }
@@ -267,6 +274,7 @@ void setParameters(GPUData &d) {
 
     d.reflectIO = 1 - sqrt(tau / (6*D_cell)) * 4 * P_expr;
     d.reflectOI = 1 - ((1 - d.reflectIO) * sqrt(D_cell/D_extra));
+    d.tcp = tcp;
 
     d.num_cells = num_cells;
     d.num_waters = num_water;
@@ -277,6 +285,7 @@ void setParameters(GPUData &d) {
     d.g = g;
     d.tau = tau;
     d.bound = bound;
+    d.pfreq = pfreq;
 }
 
 /**
@@ -349,18 +358,28 @@ __device__ void accumulatePhase(water_info *w, GPUData &d) {
 }
 // END PHASE ACCUMULATION FUNCTIONS
 
-__device__ void carrPurcellFlip(water_info *w, int tStep) {
-
-}
-
-__device__ void sumMagnetizations(double *input, int tStep, double *target) {
-
+__device__ void sumMagnetizations(double *input, int timepoint, GPUData &d) {
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    int cacheIndex = threadIdx.x;
+    int i = blockDim.x/2;
+    __syncthreads();
+    while(i != 0) {
+        if( (cacheIndex < i) && ((tid + i) < d.num_waters) ) {
+            input[cacheIndex] += input[cacheIndex + i];
+        }
+        __syncthreads();
+        i /= 2;
+    }
+    if(cacheIndex == 0) {
+        d.magnetizations[timepoint * d.nBlocks + blockIdx.x] = input[0];
+    }
 }
 
 __global__ void simulateWaters(GPUData d)  {
     __shared__ double mags[threads_per_block];
 
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    int startTime = *d.time;
     water_info w;
     int x = 0;
 
@@ -372,6 +391,7 @@ __global__ void simulateWaters(GPUData d)  {
     }
 
     for(int i = 0; i < d.timesteps; i++) {
+
         if(tid < d.num_waters) {
             x++;
             water_info init = w;
@@ -380,25 +400,36 @@ __global__ void simulateWaters(GPUData d)  {
             w.y += disp.y;
             w.z += disp.z;
             boundary_conditions(&w, d);
-            //updateNearest(&w, d);
+            updateNearest(&w, d);
 
             // Check cell boundary / MNP reflection
+
             if(cell_reflect(&init, &w, i, d))
                 w = init;
 
             accumulatePhase(&w, d);
-            carrPurcellFlip(&w, i);
 
-            /*
-            // Copy the magnetization to shared memory
-            mags[i] = cos(w.phase);
+            if((startTime + i) % (2 * d.tcp) == d.tcp) {
+                w.phase *= -1;
+            }
 
-            // Perform a memory reduction
-            sumMagnetizations(mags, i, d.magnetizations);
-            */
+            // If we need to do a reduction, copy to shared memory
+            if((startTime + i) % d.pfreq == 0)
+                mags[threadIdx.x] = cos(w.phase);
+        }
+        // Perform a memory reduction
+
+        if((startTime + i) % d.pfreq == 0) {
+            sumMagnetizations(mags, i / d.pfreq, d);
         }
     }
 
+    __syncthreads();
+    if(tid == 0) {
+        *d.time += d.timesteps;
+    }
+
+    // Copy the water molecule back to global memory
     if(tid < d.num_waters) {
         d.flags[tid] = x;
         d.waters[tid] = w;
@@ -407,6 +438,8 @@ __global__ void simulateWaters(GPUData d)  {
 
 int main(void) {
     cout << "Starting GPU Simulation..." << endl;
+    ofstream fout("test_output.csv");
+
     FCC lattice(D_cell, D_extra, P_expr);
     cudaEvent_t start, stop;
 
@@ -438,6 +471,8 @@ int main(void) {
     cout << "Allocated GPU Octree!" << endl;
     int totalUniform =  num_uniform_doubles * num_water * sprintSteps;
     int totalNormal = num_normal_doubles * num_water * sprintSteps;
+    int initTime = 0;
+
     // Allocations: Perform all allocations here
     HANDLE_ERROR(cudaMalloc((void **) &(d.waters),
         num_water * sizeof(water_info)));
@@ -449,8 +484,12 @@ int main(void) {
         totalUniform*sizeof(double)));
     HANDLE_ERROR(cudaMalloc((void **) &d.normal_doubles,
         totalNormal*sizeof(double)));
+    HANDLE_ERROR(cudaMalloc((void **) &d.time,
+        sizeof(int)));
+
+    // Allocate the target array
     HANDLE_ERROR(cudaMalloc((void **) &(d.magnetizations),
-        num_blocks * t * sizeof(double)));
+        num_blocks * (t / pfreq) * sizeof(double)));
 
     // Initialize performance timers
     HANDLE_ERROR(cudaEventCreate(&start));
@@ -460,15 +499,21 @@ int main(void) {
     HANDLE_ERROR(cudaMemcpy(d.waters, waters,
         sizeof(water_info) * num_water,
         cudaMemcpyHostToDevice));
+    HANDLE_ERROR(cudaMemcpy(d.time, &initTime,
+        sizeof(int),
+        cudaMemcpyHostToDevice));
+
     HANDLE_ERROR(cudaMemcpyToSymbol(dev_lattice, linLattice,
         sizeof(Triple) * num_cells));
 
     int flags[num_water];
+    double *magnetizations = new double[num_blocks * (t / pfreq)]; // Local magnetization target
 
     cout << "Kernel prepped!" << endl;
 
     // Run the kernel in sprints due to memory limits and timeout issues
-    for(int i = 0; i < 100; i++) {
+    double time = 0;
+    for(int i = 0; i < 1500; i++) {
         cout << "Starting sprint " << (i+1) << "." << endl;
         getUniformDoubles(totalUniform, d.uniform_doubles);
         getNormalDoubles(totalNormal, d.normal_doubles);
@@ -496,6 +541,22 @@ int main(void) {
                 success = false;
         }
         cout << "Success State: " << success << endl << "===========" << endl;
+
+        // Copy back the array of magnetizations
+        HANDLE_ERROR(cudaMemcpy(magnetizations, d.magnetizations,
+            num_blocks * (t / pfreq) * sizeof(double),
+            cudaMemcpyDeviceToHost));
+
+        for(int j = 0; j < t / pfreq; j++) {
+            double magSum = 0;
+            for(int k = 0; k < num_blocks; k++) {
+                magSum += magnetizations[j * num_blocks + k];
+            }
+            fout << time << "," << magSum << endl;
+
+            time += 1e-3;
+        }
+
     }
 
     HANDLE_ERROR(cudaEventDestroy(start));
@@ -505,5 +566,7 @@ int main(void) {
     delete[] linLattice;
     delete[] lookupTable;
     delete[] waters;
+    delete[] magnetizations;
     delete mnps;
+    fout.close();
 }
