@@ -15,6 +15,7 @@
 *.exe
 *.o
 *.so
+*.out
 *.exp
 *.lib
 
@@ -22,6 +23,8 @@
 ###########################
 *.csv
 
+# POD Files #
+*.sub
 
 # OS generated files #
 ######################

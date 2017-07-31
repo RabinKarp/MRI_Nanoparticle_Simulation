@@ -1,25 +1,14 @@
-CXX=icpc
-
-OBJS = rand_walk.o fcc_diffusion.o octree.o
+CXX=nvcc
 
 # For performance:
-CXXFLAGS = -Wall -std=c++11 -pthread -O3
+CXXFLAGS = -std=c++11 -lcurand
 
-# For debugging:
-# CXXFLAGS = -Wall -std=c++11 -pthread -g -O0
+all: gpu_sim
 
-all: octree_test T2_sim mnp_test
-
-octree_test: octree_test.o $(OBJS)
-	$(CXX) $(CXXFLAGS) $(RNGFLAGS) $(LDFLAGS) -o $@ $^
-
-T2_sim: T2_sim.o $(OBJS)
-	$(CXX) $(CXXFLAGS) $(RNGFLAGS) $(LDFLAGS) -o $@ $^
-
-mnp_test: mnp_test.o $(OBJS)
-	$(CXX) $(CXXFLAGS) $(RNGFLAGS) $(LDFLAGS) -o $@ $^
+gpu_sim:
+	nvcc -std=c++11 -lcurand cuda_test.cu fcc_diffusion.cpp rand_walk.cpp octree.cpp -o $@ $^
 
 clean:
-	rm -f *.o octree_test T2_sim mnp_test *.tmp *~ *.out *#
+	rm -f *.o gpu_sim  *.tmp *~ *.out *#
 
 .PHONY: clean all
