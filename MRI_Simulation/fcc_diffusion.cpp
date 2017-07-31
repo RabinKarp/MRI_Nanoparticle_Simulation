@@ -1,7 +1,6 @@
 /*
  * @author  Aadyot Bhatnagar
- * @author  Vivek Bharadwaj
- * @date    July 11, 2017
+ * @date    August 12, 2016
  * @file    fcc_diffusion.cpp
  * @brief   Implementation details for a class that represents a 3x3x3 face-
  *          centered cubic lattice of cells with periodic boundary conditions.
@@ -11,71 +10,12 @@
 
 #include <cmath>
 #include <iostream>
-#include <fstream>
 #include "parameters.h"
 #include "fcc_diffusion.h"
 #include "rand_walk.h"
 
 #define CELL_TYPES 6
 
-/**
- * Computes the centers of all the cells in the FCC lattice and stores
- * them in the FCC class's member array. Also computes the array of neighbors
- * for each cell.
- */
-void FCC::initLattice(int dim) {
-
-#ifdef DEBUG_LATTICE
-    std::ofstream f1("lattice.csv");
-    std::ofstream f2("neighbors.csv");
-#endif
-
-    int x, y, z;
-    x = 0;
-    y = 0;
-    z = 0;
-
-    // Initialize every entry in the sphere lookup array to sentinel -1
-    for(int i = 0; i < lw; i++) {
-        for(int j = 0; j < lw; j++) {
-            for(int k = 0; k < lw; k++) {
-                sphereLookup[i][j][k] = -1;
-            }
-        }
-    }
-
-    for(int i = 0; i < num_cells; i++) {
-        fcc[i][0] = x;
-        fcc[i][1] = y;
-        fcc[i][2] = z;
-        sphereLookup[x][y][z] = i;
-        x += 2;
-        if(x >= lw) {
-            x %= lw;
-            y += 1;
-            if(y >= lw) {
-                y = 0;
-                z += 1;
-            }
-        }
-    }
-
-    // Post-processing (for backwards-compatibility) subtract off the
-    // lattice dimension from each of the coordinates to center the lattice
-    // about the origin
-    for(int i = 0; i < num_cells; i++) {
-        fcc[i][0] -= dim;
-        fcc[i][1] -= dim;
-        fcc[i][2] -= dim;
-#ifdef DEBUG_LATTICE
-        f1 << fcc[i][0] << "," << fcc[i][1] << "," << fcc[i][2] << std::endl;
-#endif
-    }
-}
-
-/**
- * Returns an array containing triple structs with the lattice point centers
- */
 Triple* FCC::linearLattice() {
     Triple *linLattice = new Triple[num_cells];
 
@@ -87,17 +27,6 @@ Triple* FCC::linearLattice() {
     return linLattice;
 }
 
-int* FCC::linearLookupTable() {
-    int* linLookup = new int[lw * lw * lw];
-    for(int i = 0; i < lw; i++) {
-        for(int j = 0; j < lw; j++) {
-            for(int k = 0; k < lw; k++) {
-                linLookup[i * lw * lw + j * lw + k] = sphereLookup[i][j][k];
-            }
-        }
-    }
-    return linLookup;
-}
 
 /*
  * Uses cell radius to scale coordinates of cell centers in FCC lattice and
@@ -108,8 +37,7 @@ int* FCC::linearLookupTable() {
  */
 FCC::FCC(double D_in, double D_out, double P_expr)
 {
-    initLattice(n);
-    for (int i = 0; i < num_cells; i++)
+    for (int i = 0; i < 172; i++)
     {
         for (int j = 0; j < 3; j++)
         {
@@ -117,13 +45,11 @@ FCC::FCC(double D_in, double D_out, double P_expr)
             fcc[i][j] += bound/2;
         }
     }
-
     norm_in = std::normal_distribution<>(0, sqrt(pi * D_in * tau));
     norm_out = std::normal_distribution<>(0, sqrt(pi * D_out * tau));
     this->reflectIO = 1 - sqrt(tau / (6*D_in)) * 4 * P_expr;
     this->reflectOI = 1 - ((1 - reflectIO) * sqrt(D_in/D_out));
 }
-
 
 /*
  * Given a set of Cartesian boundary conditions, initialize a given number of
@@ -173,24 +99,52 @@ water_info *FCC::init_molecules(double L, int n, std::vector<MNP_info> *mnps,\
     return molecules;
 }
 
-/**
- * Helper function that checs if a sphere with specified x, y, and z
- * coordinates and specified radius overlaps with any of the nanoparticles
- * in a given vector.
+/*
+ * Initializes a cluster of magnetic nanoparticles with nucleating point init,
+ * a packing radius r_pack, and num_mnp magnetic nanoparticles identical to
+ * init in the cluster.
  */
-bool FCC::checkMNPOverlap(std::vector<MNP_info> *mnps,
-    double x, double y, double z, double r) {
-    bool overlaps = false;
-    std::vector<MNP_info>::iterator curr;
-    for (curr = mnps->begin(); curr != mnps->end() && !overlaps; curr++)
+std::vector<MNP_info> *FCC::init_cluster(MNP_info &init, double r_pack,\
+    int num_mnp, XORShift<> &gen)
+{
+    // initialize cluster around nucleating point
+    std::vector<MNP_info> *cluster = new std::vector<MNP_info>;
+    cluster->push_back(init);
+    double mmoment = init.M;
+    double mnp_radius = init.r;
+
+    // add (num_mnp - 1) additional nanoparticles r_pack away from a random
+    // nanoparticle that has already been initialized
+    for (int i = 1; i < num_mnp; i++)
     {
-        double dx = x - curr->x;
-        double dy = y - curr->y;
-        double dz = z - curr->z;
-        if (NORMSQ(dx, dy, dz) < pow(r + curr->r, 2))
-          overlaps = true;
+        bool invalid = true;
+        double x, y, z;
+
+        while (invalid)
+        {
+            // randomly select a nanoparticle for the next one to attach to, as
+            // well as a random location on its surface for attachment
+            int attach_id = gen.rand_pos_double() * i;
+            MNP_info attach = (*cluster)[attach_id];
+            x = attach.x + gen.rand_double() * r_pack;
+            y = attach.y + gen.rand_double() * r_pack;
+            z = attach.z + gen.rand_double() * r_pack;
+            invalid = false;
+
+            // re-throw if the nanoparticle overlaps with another nanoparticle
+            std::vector<MNP_info>::iterator j;
+            for (j = cluster->begin(); j != cluster->end() && !invalid; j++)
+            {
+                double dx = x - j->x;
+                double dy = y - j->y;
+                double dz = z - j->z;
+                if (NORMSQ(dx, dy, dz) < pow(2*mnp_radius, 2))
+                    invalid = true;
+            }
+        }
+        cluster->emplace_back(x, y, z, mnp_radius, mmoment);
     }
-    return overlaps;
+    return cluster;
 }
 
 /**
@@ -199,39 +153,39 @@ bool FCC::checkMNPOverlap(std::vector<MNP_info> *mnps,
  * the FCC lattice.
  */
 bool FCC::checkLatticeOverlap(double x, double y, double z, double r) {
-    bool overlaps = false;
-    for(int i = 0; i < num_cells; i++) {
-        double dx = x - fcc[i][0];
-        double dy = y - fcc[i][1];
-        double dz = z - fcc[i][2];
+   bool overlaps = false;
+   for(int i = 0; i < 172; i++) {
+       double dx = x - fcc[i][0];
+       double dy = y - fcc[i][1];
+       double dz = z - fcc[i][2];
 
-        double sqDist = NORMSQ(dx, dy, dz);
+       double sqDist = NORMSQ(dx, dy, dz);
 
-        if (sqDist < pow(cell_r + r, 2)
-            && sqDist > pow(cell_r - r, 2)) {
-            overlaps = true;
-        }
-    }
-    return overlaps;
+       if (sqDist < pow(cell_r + r, 2)
+           && sqDist > pow((cell_r - r), 2)) {
+           overlaps = true;
+       }
+   }
+   return overlaps;
 }
 
 /**
- * Helper function that checks if the given (x, y, z) coordinate is
- * contained in any cell of the FCC lattice. Returns the index of the lattice
- * cell that contains the given point, or -1 if no cell contains that point.
- */
-inline int FCC::checkLatticeContainment(double x, double y, double z) {
-    int containCell = -1;
-    for(int i = 0; i < num_cells; i++) {
-      double dx = x - fcc[i][0];
-      double dy = y - fcc[i][1];
-      double dz = z - fcc[i][2];
+* Helper function that checks if the given (x, y, z) coordinate is
+* contained in any cell of the FCC lattice. Returns the index of the lattice
+* cell that contains the given point, or -1 if no cell contains that point.
+*/
+int FCC::checkLatticeContainment(double x, double y, double z) {
+   int containCell = -1;
+   for(int i = 0; i < 172; i++) {
+     double dx = x - fcc[i][0];
+     double dy = y - fcc[i][1];
+     double dz = z - fcc[i][2];
 
-      if(NORMSQ(dx, dy, dz) < pow(cell_r, 2)) {
-        containCell = i;
-      }
-    }
-    return containCell;
+     if(NORMSQ(dx, dy, dz) < pow(cell_r, 2)) {
+       containCell = i;
+     }
+   }
+   return containCell;
 }
 
 #ifdef UNCLUSTERED
@@ -454,31 +408,34 @@ std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
 }
 #endif /* CLUSTERED */
 
-
 /*
  * Prints out the number of nanoparticles in the lattice, the volume fraction of
  * iron, and the average radius of the nanoparticles initialized.
  */
 void FCC::print_mnp_stats(std::vector<MNP_info> *mnps)
 {
+    int num_intracellular = 0;
     double sum_V = 0, sum_r = 0;
     std::vector<MNP_info>::iterator np;
     for (np = mnps->begin(); np < mnps->end(); np++)
     {
-        double rad = np->r;
-        // Subtract away lipid envelope, if any, when calculating [Fe]
+        if(checkLatticeContainment(np->x, np->y,np->z) != -1)
+            num_intracellular++;
+
+        // Factor OUT the lipid layer coating intracellular MNPs
+        double radius = np->r;
 #ifdef LIPID_ENVELOPE
         if(checkLatticeContainment(np->x, np->y, np->z) != -1)
-            rad -= lipid_width;
+            radius -= lipid_width;
 #endif
-
-        sum_V += 4.0f/3.0f * pi * pow(rad, 3);
-        sum_r += rad;
+        sum_V += 4.0f/3.0f * pi * pow(radius, 3);
+        sum_r += radius;
     }
 #ifndef UNCLUSTERED
     sum_V /= mnp_pack;
 #endif
     unsigned num_mnp = mnps->size();
+    std::cout << "Number of Intracellular MNPs: " << num_intracellular << std::endl;
     std::cout << "Volume fraction of MNPs: " << sum_V/pow(bound, 3);
     std::cout << std::endl << "Average MNP radius: " << sum_r/num_mnp;
     std::cout << "um" << std::endl << "Before applying boundary conditions, ";
@@ -503,7 +460,7 @@ void FCC::update_nearest_cell_full(water_info *w)
     double dz = z - center[2];
     double min_dist = NORMSQ(dx, dy, dz);
 
-    /* Check distance to/from ALL cells */
+    /* Check distance to/from all neighboring cells */
     for (int i = 1; i < num_cells; i++)
     {
         center = fcc[i];

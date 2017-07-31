@@ -38,7 +38,7 @@ const int num_runs = 1;     // number of times to run T2 simulation
 #undef TIMED_OUTPUT         // print out a progress report every 1ms?
 
 /* Molecule and nanoparticle info */
-const int num_water = 2000;             // number of waters in simulation
+const int num_water = 4000;             // number of waters in simulation
 const double mnp_radius = 0.1;        // radius of one nanoparticle (um)
 
 // Exactly ONE of the three flags below must be defined.
@@ -49,7 +49,7 @@ const double mnp_radius = 0.1;        // radius of one nanoparticle (um)
 #define CLUSTERED                      // MNPs clustered or unclustered?
 #undef UNCLUSTERED
 
-#define LIPID_ENVELOPE                  // Lipid envelope around intracellular
+#undef LIPID_ENVELOPE                  // Lipid envelope around intracellular
                                         // MNPs
 
 #ifdef UNCLUSTERED

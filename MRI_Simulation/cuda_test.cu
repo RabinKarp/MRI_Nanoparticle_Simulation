@@ -469,7 +469,6 @@ int main(void) {
     vector<MNP_info> *mnps = lattice.init_mnps(gen);
     water_info *waters = lattice.init_molecules(bound, num_water, mnps, gen);
     Triple* linLattice = lattice.linearLattice();
-    int* lookupTable = lattice.linearLookupTable();
 
     // Initialize the octree
     double max_product = 2e-6, max_g = 5, min_g = .002;
@@ -530,7 +529,7 @@ int main(void) {
 
     // Run the kernel in sprints due to memory limits and timeout issues
     double time = 0;
-    for(int i = 0; i < 1400; i++) {
+    for(int i = 0; i < 5000; i++) {
         cout << "Starting sprint " << (i+1) << "." << endl;
         getUniformDoubles(totalUniform, d.uniform_doubles);
         getNormalDoubles(totalNormal, d.normal_doubles);
@@ -581,7 +580,6 @@ int main(void) {
     finalizeGPU(d);
 
     delete[] linLattice;
-    delete[] lookupTable;
     delete[] waters;
     delete[] magnetizations;
     delete mnps;
