@@ -86,7 +86,7 @@ const double tau = 1e-6;                // time step in ms
 const double totaltime = 1e-2;          // total time to run for in ms
 
 const int t = (int)(totaltime/tau);     // total time steps
-const double taucp = 3.5;               // Carr-Purcell time in ms, previously 1.5
+const double taucp = 5.5;               // Carr-Purcell time in ms, previously 1.5
 const int tcp = (int)(taucp/tau);       // time steps per Carr-Purcell time
 
 #endif /* PARAMETERS_H */

@@ -334,12 +334,12 @@ __device__ bool mnp_reflect(water_info *w, MNP_info *mnp, int num_mnps, GPUData 
 
 __device__ water_info rand_displacement(int tid, int tStep, water_info *w, GPUData &d) {
     water_info disp;
-    double norm = abs(d.normal_doubles[tStep * d.num_waters + tid]);
+    double norm = d.normal_doubles[tStep * d.num_waters + tid];
     int baseU = tStep * d.num_waters * 4 + tid * 4;
 
-    disp.x = d.uniform_doubles[baseU];
-    disp.y = d.uniform_doubles[baseU + 1];
-    disp.z = d.uniform_doubles[baseU + 2];
+    disp.x = d.uniform_doubles[baseU] * 2 - 1.0;
+    disp.y = d.uniform_doubles[baseU + 1] * 2 - 1.0;
+    disp.z = d.uniform_doubles[baseU + 2] * 2 - 1.0;
 
     if(w->in_cell) {
         norm *= d.in_stdev;
@@ -348,7 +348,7 @@ __device__ water_info rand_displacement(int tid, int tStep, water_info *w, GPUDa
         norm *= d.out_stdev;
     }
 
-    double nConstant = norm / NORMSQ(disp.x, disp.y, disp.z);
+    double nConstant = norm / sqrt(NORMSQ(disp.x, disp.y, disp.z));
 
     disp.x *= nConstant;
     disp.y *= nConstant;
@@ -392,8 +392,8 @@ __global__ void simulateWaters(GPUData d)  {
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
     int startTime = *d.time;
     water_info w;
-    gpu_node *voxel = get_voxel(&w, d);
-    gpu_node *oldVoxel;
+    gpu_node *voxel;
+
 
     int x = 0;
 
@@ -409,7 +409,6 @@ __global__ void simulateWaters(GPUData d)  {
         if(tid < d.num_waters) {
             x++;
             water_info init = w;
-            oldVoxel = voxel;
 
             water_info disp = rand_displacement(tid, i, &w, d);
             w.x += disp.x;
@@ -423,7 +422,6 @@ __global__ void simulateWaters(GPUData d)  {
 
             if(cell_reflect(&init, &w, i, d) || mnp_reflect(&w, voxel->resident, voxel->numResidents,d)) {
                 w = init;
-                voxel = oldVoxel;
             }
 
             accumulatePhase(&w, voxel, d);
@@ -532,7 +530,7 @@ int main(void) {
 
     // Run the kernel in sprints due to memory limits and timeout issues
     double time = 0;
-    for(int i = 0; i < 1000; i++) {
+    for(int i = 0; i < 1400; i++) {
         cout << "Starting sprint " << (i+1) << "." << endl;
         getUniformDoubles(totalUniform, d.uniform_doubles);
         getNormalDoubles(totalNormal, d.normal_doubles);
