@@ -1,12 +1,12 @@
 CXX=nvcc
 
 # For performance:
-CXXFLAGS = -std=c++11 -lcurand
+CXFLAGS = -std=c++11 -lcurand
 
 all: gpu_sim
 
 gpu_sim:
-	nvcc -std=c++11 -lcurand cuda_test.cu fcc_diffusion.cpp rand_walk.cpp octree.cpp -o $@ $^
+	nvcc -std=c++11 --use_fast_math -lcurand -gencode arch=compute_35,code=compute_35 -gencode arch=compute_35,code=sm_35 cuda_test.cu fcc_diffusion.cpp rand_walk.cpp octree.cpp -o $@ $^
 
 clean:
 	rm -f *.o gpu_sim  *.tmp *~ *.out *#
