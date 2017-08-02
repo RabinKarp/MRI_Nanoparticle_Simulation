@@ -6,7 +6,7 @@ OBJS = rand_walk.o fcc_diffusion.o octree.o
 CXXFLAGS = -Wall -std=c++11 -pthread -O3
 
 # For debugging:
-# CXXFLAGS = -Wall -std=c++11 -pthread -g -O0
+#CXXFLAGS = -Wall -std=c++11 -pthread -g -O0
 
 all: octree_test T2_sim
 
@@ -16,7 +16,10 @@ octree_test: octree_test.o $(OBJS)
 T2_sim: T2_sim.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(RNGFLAGS) $(LDFLAGS) -o $@ $^
 
+cell_test: cell_tester.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(RNGFLAGS) $(LDFLAGS) -o $@ $^
+
 clean:
-	rm -f *.o octree_test T2_sim *.tmp *~ *.out *#
+	rm -f *.o octree_test cell_test T2_sim *.tmp *~ *.out *#
 
 .PHONY: clean all

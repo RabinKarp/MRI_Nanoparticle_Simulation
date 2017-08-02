@@ -10,11 +10,14 @@
 
 #include <cmath>
 #include <iostream>
+#include <vector>
 #include "parameters.h"
 #include "fcc_diffusion.h"
 #include "rand_walk.h"
 
 #define CELL_TYPES 6
+
+using namespace std;
 
 /*
  * Uses cell radius to scale coordinates of cell centers in FCC lattice and
@@ -23,6 +26,44 @@
  * deviation expected from the Gaussian distribution used to generate random
  * displacement vectors.
  */
+
+void FCC::initializeLookupTable() {
+    lookupTable = new int*[hashDim * hashDim * hashDim];
+    double cubeLength = bound / hashDim;
+    double diagonal = sqrt(3) * cubeLength;
+
+    for(int i = 0; i < hashDim * hashDim * hashDim; i++) {
+        vector<int> cells;
+        double x = (i % hashDim) * cubeLength;
+        double y = ((i / hashDim) % (hashDim)) * cubeLength;
+        double z = i / (hashDim * hashDim) * cubeLength;
+
+        for(int j = 0; j < 172; j++) {
+            double dx = fcc[j][0] - x;
+            double dy = fcc[j][1] - y;
+            double dz = fcc[j][2] - z;
+            if(sqrt(NORMSQ(dx, dy, dz)) < cell_r + diagonal) {
+                cells.push_back(j);
+            }
+        }
+
+        // Add a sentinel so we don't have to keep track
+        // of array lengths
+        cells.push_back(-1);
+
+        if(cells.size() > 0) {
+            lookupTable[i] = new int[cells.size()];
+
+            for(int j = 0; j < cells.size(); j++) {
+                lookupTable[i][j] = cells[j];
+            }
+        }
+        else {
+            lookupTable[i] = nullptr;
+        }
+    }
+}
+
 FCC::FCC(double D_in, double D_out, double P_expr)
 {
     for (int i = 0; i < 172; i++)
@@ -37,6 +78,17 @@ FCC::FCC(double D_in, double D_out, double P_expr)
     norm_out = std::normal_distribution<>(0, sqrt(pi * D_out * tau));
     this->reflectIO = 1 - sqrt(tau / (6*D_in)) * 4 * P_expr;
     this->reflectOI = 1 - ((1 - reflectIO) * sqrt(D_in/D_out));
+    initializeLookupTable();
+}
+
+/**
+ * Destroy the lookup the table for the face-centered cubic lattice.
+ */
+FCC::~FCC() {
+    for(int i = 0; i < hashDim * hashDim * hashDim; i++) {
+        if(lookupTable[i])
+            delete[] lookupTable[i];
+    }
 }
 
 /*
@@ -481,34 +533,34 @@ void FCC::update_nearest_cell(water_info *w)
     double y = w->y;
     double z = w->z;
 
-    /* Information about nearest cell center on the last timestep */
-    int nearest = w->nearest;
-    int *check = neighbors[nearest];
-    double *center = fcc[nearest];
-    double dx = x - center[0];
-    double dy = y - center[1];
-    double dz = z - center[2];
-    double min_dist = NORMSQ(dx, dy, dz);
+    double cubeLength = bound / hashDim;
+    int x_idx = x / cubeLength;
+    int y_idx = y / cubeLength;
+    int z_idx = z / cubeLength;
 
-    /* Check distance to/from all neighboring cells */
-    for (int i = 0; i < num_neighbors; i++)
-    {
-        int curr_check = check[i];
-        double *curr_center = fcc[curr_check];
-        dx = x - curr_center[0];
-        dy = y - curr_center[1];
-        dz = z - curr_center[2];
+    int* nearest =
+        lookupTable[z_idx * hashDim * hashDim
+            + y_idx * hashDim
+            + x_idx];
 
-        double curr_dist = NORMSQ(dx, dy, dz);
-        if (curr_dist < min_dist)
-        {
-            min_dist = curr_dist;
-            nearest = curr_check;
+    double cDist = bound * sqrt(3);
+
+    int cIndex = -1;
+    while(*nearest != -1) {
+        double dx = fcc[*nearest][0] - x;
+        double dy = fcc[*nearest][1] - y;
+        double dz = fcc[*nearest][2] - z;
+
+        double dist = NORMSQ(dx, dy, dz);
+        if(NORMSQ(dx, dy, dz) < cDist) {
+            cDist = dist;
+            cIndex = *nearest;
         }
+        nearest++;
     }
 
-    /* Update water molecule's record of nearest cell */
-    w->nearest = nearest;
+    // TODO: Update whether water molecule is inside cell or not
+    w->nearest = cIndex;
 }
 
 /*
