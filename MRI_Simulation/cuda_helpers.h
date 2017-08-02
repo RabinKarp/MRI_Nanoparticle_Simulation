@@ -44,7 +44,10 @@ typedef struct GPUData {
     int num_cells;
     double cell_r;
     double bound;
-    int* sphereLookup;
+    Triple *lattice;
+    int hashDim;
+    int **lookupTable;
+    int **localLookup;
 
     // Related to diffusion
     double reflectIO;

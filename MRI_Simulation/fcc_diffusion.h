@@ -31,6 +31,9 @@ class FCC
 {
     public:
     FCC(double D_in, double D_out, double P);
+    ~FCC();
+
+    void initializeLookupTable();
     double diffusion_step(water_info *w, Octree *tree, XORShift<> &gen);
     std::vector<MNP_info> *init_mnps(XORShift<> &gen);
     water_info *init_molecules(double L, int n, std::vector<MNP_info> *mnps,\
@@ -39,6 +42,9 @@ class FCC
         int num_mnp, XORShift<> &gen);
     void update_nearest_cell_full(water_info *w);
     Triple* linearLattice();
+    void update_nearest_cell(water_info *w);
+
+    int** lookupTable;
 
     private:
     double reflectIO, reflectOI;
@@ -49,7 +55,6 @@ class FCC
 
     bool in_cell(water_info *w);
     bool boundary_conditions(water_info *w);
-    void update_nearest_cell(water_info *w);
     void print_mnp_stats(std::vector<MNP_info> *mnps);
     void apply_bcs_on_mnps(std::vector<MNP_info> *mnps);
 

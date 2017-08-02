@@ -259,6 +259,7 @@ void finalizeGPU(GPUData &d) {
     cudaFree(d.uniform_doubles);
     cudaFree(d.normal_doubles);
     cudaFree(d.magnetizations);
+    cudaFree(d.lattice);
     cudaFree(d.time);
 
     destroyTree(d);
@@ -283,26 +284,39 @@ void setParameters(GPUData &d) {
     d.tau = tau;
     d.bound = bound;
     d.pfreq = pfreq;
+    d.hashDim = hashDim;
 }
 
 /**
  * Trivial implementation of nearest cell finder
  */
 __device__ void updateNearest(water_info *w, GPUData &d) {
-    int cIndex = 0;
-    double cDist = HIGH;
-    w->in_cell = false;
-    for(int i = 0; i < 172; i++) {
-        double dx = w->x - dev_lattice[i].x;
-        double dy = w->y - dev_lattice[i].y;
-        double dz = w->z - dev_lattice[i].z;
+    double cubeLength = d.bound / d.hashDim;
+    int x_idx = w->x / cubeLength;
+    int y_idx = w->y / cubeLength;
+    int z_idx = w->z / cubeLength;
+
+    int* nearest =
+        d.lookupTable[z_idx * d.hashDim * d.hashDim
+        + y_idx * d.hashDim
+        + x_idx];
+
+    double cDist = d.bound * d.bound * 3;
+    int cIndex = -1;
+    while(*nearest != -1) {
+        double dx = d.lattice[*nearest].x - w->x;
+        double dy = d.lattice[*nearest].y - w->y;
+        double dz = d.lattice[*nearest].z - w->z;
+
+        double dist = NORMSQ(dx, dy, dz);
         if(NORMSQ(dx, dy, dz) < cDist) {
-            cDist = NORMSQ(dx, dy, dz);
-            cIndex = i;
+            cDist = dist;
+            cIndex = *nearest;
         }
+        nearest++;
     }
-    if(cDist < d.cell_r * d.cell_r)
-        w->in_cell = true;
+
+    w->in_cell = (cDist < cell_r * cell_r);
     w->nearest = cIndex;
 }
 
@@ -451,6 +465,26 @@ __global__ void simulateWaters(GPUData d)  {
     }
 }
 
+void cpyLookupDevice(int **sourceTable, GPUData &d) {
+    d.localLookup = new int*[hashDim * hashDim * hashDim];
+
+    for(int i = 0; i < hashDim * hashDim * hashDim; i++) {
+        localLookup[i] = (int *) cudaAllocate(maxNeighbors * sizeof(int));
+        copyToDevice((void *) localLookup[i], (void *) sourceTable[i],
+            maxNeighbors * sizeof(int));
+    }
+    copyToDevice((void *) d.lookupTable, d.localLookup,
+        hashDim * hashDim * hashDim * sizeof(int*));
+}
+
+void destroyLookupDevice(GPUData &d) {
+    for(int i = 0; i < hashDim * hashDim * hashDim; i++) {
+        cudaFree(d.localLookup[i]);
+        delete[] d.localLookup[i];
+    }
+    cudaFree(d.localLookup);
+}
+
 int main(void) {
     cout << "Starting GPU Simulation..." << endl;
     ofstream fout("test_output.csv");
@@ -501,6 +535,10 @@ int main(void) {
     HANDLE_ERROR(cudaMalloc((void **) &d.time,
         sizeof(int)));
 
+    d.lattice = (Triple*) cudaAllocate(sizeof(Triple) * num_cells);
+    copyToDevice(d.lattice, linLattice, num_cells * sizeof(Triple));
+    cpyLookupDevice(lattice.lookupTable, d);
+
     // Allocate the target array
     HANDLE_ERROR(cudaMalloc((void **) &(d.magnetizations),
         num_blocks * (t / pfreq) * sizeof(double)));
@@ -516,9 +554,6 @@ int main(void) {
     HANDLE_ERROR(cudaMemcpy(d.time, &initTime,
         sizeof(int),
         cudaMemcpyHostToDevice));
-
-    HANDLE_ERROR(cudaMemcpyToSymbol(dev_lattice, linLattice,
-        sizeof(Triple) * num_cells));
 
     int flags[num_water];
     double *magnetizations = new double[num_blocks * (t / pfreq)]; // Local magnetization target
@@ -570,11 +605,11 @@ int main(void) {
 
             time += 1e-3;
         }
-
     }
 
     HANDLE_ERROR(cudaEventDestroy(start));
     HANDLE_ERROR(cudaEventDestroy(stop));
+    destroyLookupDevice(d);
     finalizeGPU(d);
 
     delete[] linLattice;
