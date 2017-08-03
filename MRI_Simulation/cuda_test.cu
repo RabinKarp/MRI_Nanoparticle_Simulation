@@ -316,7 +316,7 @@ __device__ void updateNearest(water_info *w, GPUData &d) {
         nearest++;
     }
 
-    w->in_cell = (cDist < cell_r * cell_r);
+    w->in_cell = (cDist < d.cell_r * d.cell_r);
     w->nearest = cIndex;
 }
 
@@ -469,10 +469,11 @@ void cpyLookupDevice(int **sourceTable, GPUData &d) {
     d.localLookup = new int*[hashDim * hashDim * hashDim];
 
     for(int i = 0; i < hashDim * hashDim * hashDim; i++) {
-        localLookup[i] = (int *) cudaAllocate(maxNeighbors * sizeof(int));
-        copyToDevice((void *) localLookup[i], (void *) sourceTable[i],
+        d.localLookup[i] = (int *) cudaAllocate(maxNeighbors * sizeof(int));
+        copyToDevice((void *) d.localLookup[i], (void *) sourceTable[i],
             maxNeighbors * sizeof(int));
     }
+    d.lookupTable = (int**) cudaAllocate(hashDim * hashDim * hashDim * sizeof(int**));
     copyToDevice((void *) d.lookupTable, d.localLookup,
         hashDim * hashDim * hashDim * sizeof(int*));
 }
@@ -480,9 +481,9 @@ void cpyLookupDevice(int **sourceTable, GPUData &d) {
 void destroyLookupDevice(GPUData &d) {
     for(int i = 0; i < hashDim * hashDim * hashDim; i++) {
         cudaFree(d.localLookup[i]);
-        delete[] d.localLookup[i];
     }
-    cudaFree(d.localLookup);
+    cudaFree(d.lookupTable);
+    delete[] d.localLookup;
 }
 
 int main(void) {

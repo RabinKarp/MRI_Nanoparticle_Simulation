@@ -75,7 +75,7 @@ const double cell_r = 9;                // cell radius in microns
 const double prob_labeled = 0.26;       // probability a given cell is labeled
 const double fcc_pack = 1.00;           // influences FCC packing efficiency
 const double bound = 6 *sqrt(2)*cell_r*fcc_pack; // full box is [0, bound]^3
-const int hashDim = 40;
+const int hashDim = 20;
 const int maxNeighbors = 13;
 
 /* Constants affecting diffusion */
