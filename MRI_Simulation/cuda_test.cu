@@ -29,7 +29,7 @@ using namespace std;
   * m_61 -lcurand -ccbin "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\bin\amd64_x86"
   */
 
-#define threads_per_block 32
+#define threads_per_block 256
 const int num_blocks = (num_water + threads_per_block - 1) / threads_per_block;
 
 const double g = 42.5781e6;             // gyromagnetic ratio in MHz/T
@@ -64,13 +64,16 @@ inline void copyToHost(void* dest, void* source, long long int size) {
 
 __device__ double dipole_field(double dx, double dy, double dz, double M)
 {
-    double divisor = pow(NORMSQ(dx, dy, dz), 2.5);
+    double sqDist = NORMSQ(dx, dy, dz);
+    double divisor = sqDist * sqDist * sqrt(sqDist);
     return M * 1e11 * (2*dz*dz - dx*dx - dy*dy) / divisor;
 }
 
-__device__ uint64_t morton_code(int depth, double x, double y, double z, GPUData &d) {
+__device__ uint64_t morton_code(int depth, double &x, double &y, double &z, GPUData &d) {
 
-    double size = pow(2.0, depth);
+    //double size = pow(2.0, depth);
+    //double size = exp2((double) depth);
+    uint64_t size = 1 << (depth);
     uint32_t idx_x = floor(x / d.bound * size);
     uint32_t idx_y = floor(y / d.bound * size);
     uint32_t idx_z = floor(z / d.bound * size);
