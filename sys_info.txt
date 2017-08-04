@@ -1,0 +1,67 @@
+
+==============NVSMI LOG==============
+
+Timestamp                           : Fri Aug  4 06:55:21 2017
+Driver Version                      : 375.26
+
+Attached GPUs                       : 2
+GPU 0000:02:00.0
+    Supported Clocks
+        Memory                      : 3004 MHz
+            Graphics                : 875 MHz
+            Graphics                : 810 MHz
+            Graphics                : 745 MHz
+            Graphics                : 666 MHz
+        Memory                      : 324 MHz
+            Graphics                : 324 MHz
+
+GPU 0000:84:00.0
+    Supported Clocks
+        Memory                      : 3004 MHz
+            Graphics                : 875 MHz
+            Graphics                : 810 MHz
+            Graphics                : 745 MHz
+            Graphics                : 666 MHz
+        Memory                      : 324 MHz
+            Graphics                : 324 MHz
+
+   --- General Information for device 0 ---
+Name:  Tesla K40m
+Compute capability:  3.5
+Clock rate:  745000
+Device copy overlap:  Enabled
+Kernel execution timeout :  Enabled
+   --- Memory Information for device 0 ---
+Total global mem:  11995578368
+Total constant Mem:  65536
+Max mem pitch:  2147483647
+Texture Alignment:  512
+   --- MP Information for device 0 ---
+Multiprocessor count:  15
+Shared mem per mp:  49152
+Registers per mp:  65536
+Threads in warp:  32
+Max threads per block:  1024
+Max thread dimensions:  (1024, 1024, 64)
+Max grid dimensions:  (2147483647, 65535, 65535)
+
+   --- General Information for device 1 ---
+Name:  Tesla K40m
+Compute capability:  3.5
+Clock rate:  745000
+Device copy overlap:  Enabled
+Kernel execution timeout :  Enabled
+   --- Memory Information for device 1 ---
+Total global mem:  11995578368
+Total constant Mem:  65536
+Max mem pitch:  2147483647
+Texture Alignment:  512
+   --- MP Information for device 1 ---
+Multiprocessor count:  15
+Shared mem per mp:  49152
+Registers per mp:  65536
+Threads in warp:  32
+Max threads per block:  1024
+Max thread dimensions:  (1024, 1024, 64)
+Max grid dimensions:  (2147483647, 65535, 65535)
+

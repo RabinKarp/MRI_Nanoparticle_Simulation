@@ -29,7 +29,7 @@ using namespace std;
   * m_61 -lcurand -ccbin "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\bin\amd64_x86"
   */
 
-#define threads_per_block 256
+#define threads_per_block 128
 const int num_blocks = (num_water + threads_per_block - 1) / threads_per_block;
 
 const double g = 42.5781e6;             // gyromagnetic ratio in MHz/T
@@ -566,7 +566,7 @@ int main(void) {
 
     // Run the kernel in sprints due to memory limits and timeout issues
     double time = 0;
-    for(int i = 0; i < 2; i++) {
+    for(int i = 0; i < 6700; i++) {
         cout << "Starting sprint " << (i+1) << "." << endl;
         getUniformDoubles(totalUniform, d.uniform_doubles);
         getNormalDoubles(totalNormal, d.normal_doubles);
