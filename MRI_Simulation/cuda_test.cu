@@ -19,15 +19,6 @@
 #include "octree.h"
 
 using namespace std;
-/**
- *  nvcc cuda_test.cu fcc_diffusion.cpp rand_walk.cpp octree.cpp -arch=sm_61 -lcurand -ccbin "
- * C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\bin\amd64_x86"
- */
-
- /*
-  * nvcc cuda_test.cu fcc_diffusion.cpp rand_walk.cpp octree.cpp -arch=s
-  * m_61 -lcurand -ccbin "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\bin\amd64_x86"
-  */
 
 #define threads_per_block 128
 const int num_blocks = (num_water + threads_per_block - 1) / threads_per_block;

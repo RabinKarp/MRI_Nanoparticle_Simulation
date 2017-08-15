@@ -11,12 +11,6 @@
 
 #include <cmath>
 
-struct Triple {
-    double x;
-    double y;
-    double z;
-};
-
 /* Parameters affecting nanoparticle residency in nodes */
 #undef FULL_BOUNDARIES      // use full boundary conditions to calculate field?
 const double raw_scale = 7; // calculate B explicitly within scale*R of cluster

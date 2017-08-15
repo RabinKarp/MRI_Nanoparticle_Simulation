@@ -6,12 +6,11 @@
 #include "rand_walk.h"
 #include "octree.h"
 
-// Macro for GPU-callable member functions
-#ifdef __CUDACC__
-#define CUDA_CALLABLE_MEMBER __device__
-#else
-#define CUDA_CALLABLE_MEMBER
-#endif
+struct Triple {
+    double x;
+    double y;
+    double z;
+};
 
 typedef struct gpu_node {
     uint64_t mc;        // Mocton code of node; leaf if leftmost bit is set
