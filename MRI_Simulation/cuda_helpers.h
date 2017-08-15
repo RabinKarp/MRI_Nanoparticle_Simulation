@@ -55,6 +55,9 @@ typedef struct GPUData {
     double in_stdev;
     double out_stdev;
 
+    int numOI;
+    int numIO;
+
     // Related to simulation time
     int tcp;
     int pfreq;

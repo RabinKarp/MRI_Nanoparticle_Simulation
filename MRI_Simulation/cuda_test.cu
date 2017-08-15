@@ -18,7 +18,6 @@
 #include "gpu_random.h"
 #include "octree.h"
 
-using namespace std;
 /**
  *  nvcc cuda_test.cu fcc_diffusion.cpp rand_walk.cpp octree.cpp -arch=sm_61 -lcurand -ccbin "
  * C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\bin\amd64_x86"
@@ -264,6 +263,8 @@ void finalizeGPU(GPUData &d) {
     cudaFree(d.magnetizations);
     cudaFree(d.lattice);
     cudaFree(d.time);
+    cudaFree(d.numOI);
+    cudaFree(d.numIO);
 
     destroyTree(d);
 }
@@ -328,6 +329,12 @@ __device__ bool cell_reflect(water_info *i, water_info *f, int tStep, GPUData &d
     double coin = d.uniform_doubles[tStep * d.num_waters * 4 + tid * 4 + 3];
     bool flip = (i->in_cell && (! f->in_cell) && coin < d.reflectIO)
                     || ((! i->in_cell) && f->in_cell && coin < d.reflectOI);
+
+    if(flip && i->in_cell)
+        d.numIO++;
+    if(flip && ! i->in_cell)
+        d.numOI++;
+
     return flip;
 }
 
@@ -405,6 +412,13 @@ __global__ void simulateWaters(GPUData d)  {
     __shared__ double mags[threads_per_block];
 
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
+
+    // Global initialization code
+    if(tid == 0) {
+        d.reflectOI = 0;
+        d.reflectIO = 0;
+    }
+
     int startTime = *d.time;
     water_info w;
     gpu_node *voxel;
@@ -539,6 +553,9 @@ int main(void) {
     HANDLE_ERROR(cudaMalloc((void **) &d.time,
         sizeof(int)));
 
+    d.numOI = (int *) cudaAllocate(sizeof(int));
+    d.numIO = (int *) cudaAllocate(sizeof(int));
+
     d.lattice = (Triple*) cudaAllocate(sizeof(Triple) * num_cells);
     copyToDevice(d.lattice, linLattice, num_cells * sizeof(Triple));
     cpyLookupDevice(lattice.lookupTable, d);
@@ -566,7 +583,7 @@ int main(void) {
 
     // Run the kernel in sprints due to memory limits and timeout issues
     double time = 0;
-    for(int i = 0; i < 6700; i++) {
+    for(int i = 0; i < 5; i++) {
         cout << "Starting sprint " << (i+1) << "." << endl;
         getUniformDoubles(totalUniform, d.uniform_doubles);
         getNormalDoubles(totalNormal, d.normal_doubles);
@@ -610,6 +627,12 @@ int main(void) {
             time += 1e-3;
         }
     }
+
+    cout << "Simulation complete!" << endl;
+    cout << "Inner-outer crossings: " << d.numIO << endl;
+    cout << "Outer-inner crossings: " << d.numOI << endl;
+    cout << "Inner-outer probability: " << d.reflectIO << endl;
+    cout << "Outer-inner probability: " << d.reflectOI << endl;
 
     HANDLE_ERROR(cudaEventDestroy(start));
     HANDLE_ERROR(cudaEventDestroy(stop));
