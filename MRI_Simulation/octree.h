@@ -15,6 +15,8 @@
 #include <vector>
 #include <cmath>
 
+#define OCTREE_MAX_DEPTH 21
+
 typedef union B_idx {
     uint32_t idx;
     float B;
@@ -39,7 +41,7 @@ class Octree
     Octree(double max_product, double max_g, double min_g, XORShift<> &gen,\
             std::vector<MNP_info> *mnps);
     ~Octree();
-    
+
     int min_depth, max_depth;
 
     /* The octree itself, an array of all 8^min_depth vectorized subtrees */

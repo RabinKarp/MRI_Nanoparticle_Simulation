@@ -33,8 +33,6 @@ void getUniformDoubles(size_t n, double *devData)
 
     HANDLE_ERROR(cudaEventRecord(start, 0));
 
-    cout << "Generating uniform random numbers!" << endl;
-
     /* Generate n doubles on device */
     curandGenerateUniformDouble(gen, devData, n);
     HANDLE_ERROR(cudaEventRecord(stop, 0));
@@ -42,9 +40,6 @@ void getUniformDoubles(size_t n, double *devData)
 
     float elapsedTime;
     HANDLE_ERROR(cudaEventElapsedTime(&elapsedTime, start, stop));
-
-    cout << "RNG complete! Elapsed time: "
-      << elapsedTime << " ms" << endl;
 
     /* Cleanup */
     curandDestroyGenerator(gen);
@@ -72,8 +67,6 @@ void getNormalDoubles(size_t n, double *devData)
 
     HANDLE_ERROR(cudaEventRecord(start, 0));
 
-    cout << "Generating normal random numbers!" << endl;
-
     /* Generate n doubles on device */
     curandGenerateNormalDouble(gen, devData, n, 0.0, 1.0);
     HANDLE_ERROR(cudaEventRecord(stop, 0));
@@ -81,9 +74,6 @@ void getNormalDoubles(size_t n, double *devData)
 
     float elapsedTime;
     HANDLE_ERROR(cudaEventElapsedTime(&elapsedTime, start, stop));
-
-    cout << "RNG complete! Elapsed time: "
-      << elapsedTime << " ms" << endl;
 
     /* Cleanup */
     curandDestroyGenerator(gen);

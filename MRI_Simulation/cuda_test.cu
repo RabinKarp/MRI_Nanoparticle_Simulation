@@ -12,6 +12,7 @@
 #include <fstream>
 #include <thread>
 #include <iostream>
+#include <cassert>
 #include "math.h"
 #include "parameters.h"
 #include "fcc_diffusion.h"
@@ -34,6 +35,7 @@ const int num_blocks = (num_water + threads_per_block - 1) / threads_per_block;
 
 const double g = 42.5781e6;             // gyromagnetic ratio in MHz/T
 const int pfreq = (int)(1e-3/tau);      // print net magnetization every 1us
+const int statFreq = 10;                // Print status to stdout every x kernel calls
 
 // Each kernel execution handles AT MOST this many timesteps
 const int sprintSteps = 10000;
@@ -122,13 +124,13 @@ __device__ unsigned find_child(double wx, double wy, double wz, int d, GPUData &
 
 // TODO: Check this function!
 __device__ gpu_node* find_node(gpu_node *n, double wx, double wy, double wz, int d, GPUData &data) {
-    // base case -- node is a leaf
-    if (n->mc >> 63)
-        return n;
-
-    // otherwise, navigate to the appropriate child and recurse
-    unsigned child_no = find_child(wx, wy, wz, d, data);
-    return find_node(n + n->child[child_no].idx, wx, wy, wz, d + 1, data);
+    while( ! (n->mc >> 63)) {
+        unsigned child_no = find_child(wx, wy, wz, d, data);
+        d++;
+        n += n->child[child_no].idx;
+    }
+    return n;
+    //return find_node(n + n->child[child_no].idx, wx, wy, wz, d + 1, data);
 }
 
 __device__ gpu_node* get_voxel(water_info *w, GPUData &d) {
@@ -566,8 +568,7 @@ int main(void) {
 
     // Run the kernel in sprints due to memory limits and timeout issues
     double time = 0;
-    for(int i = 0; i < 6700; i++) {
-        cout << "Starting sprint " << (i+1) << "." << endl;
+    for(int i = 0; i < 3000; i++) {
         getUniformDoubles(totalUniform, d.uniform_doubles);
         getNormalDoubles(totalNormal, d.normal_doubles);
 
@@ -580,20 +581,23 @@ int main(void) {
         float elapsedTime;
         HANDLE_ERROR(cudaEventElapsedTime(&elapsedTime, start, stop));
 
-        cout << "Kernel execution complete! Elapsed time: "
-            << elapsedTime << " ms" << endl;
-
         // Copy back the array of flags to catch any errors
         HANDLE_ERROR(cudaMemcpy(flags, d.flags,
             sizeof(int) * num_water,
             cudaMemcpyDeviceToHost));
 
         bool success = true;
-        for(int i = 0; i < num_water; i++) {
-            if(flags[i] != t)
+        for(int j = 0; j < num_water; j++) {
+            if(flags[j] != t)
                 success = false;
         }
-        cout << "Success State: " << success << endl << "===========" << endl;
+        assert(success); // Ensure complete kernel execution with the checksum
+
+        if(! (i % statFreq)) {
+            cout << "Kernel execution " << i << " complete! Elapsed time: "
+              << elapsedTime << " ms" << endl;
+            cout << "Success State: " << success << endl << "===========" << endl;
+        }
 
         // Copy back the array of magnetizations
         HANDLE_ERROR(cudaMemcpy(magnetizations, d.magnetizations,
