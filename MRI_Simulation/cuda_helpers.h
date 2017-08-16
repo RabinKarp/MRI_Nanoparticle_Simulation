@@ -23,26 +23,26 @@ typedef struct GPUData {
     int num_mnps;
     int min_depth;
     int max_depth;
-    gpu_node **tree;
-    gpu_node **localPointers;
+    gpu_node** __restrict__ tree;
+    gpu_node** localPointers;
     int *sizes;
     int arr_size;
 
     std::vector<void*> *addresses;
 
     // Morton code arrays
-    uint32_t* morton_x;
-    uint32_t* morton_y;
-    uint32_t* morton_z;
+    uint32_t* __restrict__ morton_x;
+    uint32_t* __restrict__ morton_y;
+    uint32_t* __restrict__ morton_z;
 
     // Related to the lattice
     int num_cells;
     double cell_r;
     double bound;
-    Triple *lattice;
+    Triple* __restrict__ lattice;
     int hashDim;
-    int **lookupTable;
-    int **localLookup;
+    int** __restrict__ lookupTable;
+    int** __restrict__ localLookup;
 
     // Related to diffusion
     double reflectIO;

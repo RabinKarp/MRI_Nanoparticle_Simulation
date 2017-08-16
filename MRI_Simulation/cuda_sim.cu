@@ -21,6 +21,11 @@
 
 using namespace std;
 
+struct t_rands {
+    double *uniform;
+    double *norm;
+};
+
 #define threads_per_block 128
 const int num_blocks = (num_water + threads_per_block - 1) / threads_per_block;
 
@@ -32,7 +37,9 @@ const int sprintSteps = 20000;
 #define num_uniform_doubles 4 // # of uniform doubles per water per tstep
 #define num_normal_doubles 2  // # of normal  doubles per water per tstep
 
-__constant__ Triple dev_lattice[num_cells];
+//==============================================================================
+// CUDA Utility functions
+//==============================================================================
 
 inline void* cudaAllocate(long long int size) {
     void *ptr;
@@ -52,6 +59,8 @@ inline void copyToHost(void* dest, void* source, long long int size) {
         cudaMemcpyDeviceToHost));
 }
 
+//==============================================================================
+// Octree-related functions
 //==============================================================================
 
 __device__ double dipole_field(double dx, double dy, double dz, double M, GPUData &d)
@@ -243,6 +252,9 @@ void destroyTree(GPUData &d) {
     delete[] d.sizes;
     delete d.addresses;
 }
+
+//==============================================================================
+// GPU setup functions
 //==============================================================================
 
 void finalizeGPU(GPUData &d) {
@@ -279,6 +291,10 @@ void setParameters(GPUData &d) {
     d.hashDim = hashDim;
     d.phase_stdev = phase_stdev;
 }
+
+//==============================================================================
+// Simulation functions
+//==============================================================================
 
 __device__ void updateNearest(water_info *w, GPUData &d) {
     double cubeLength = d.bound / d.hashDim;
@@ -334,17 +350,13 @@ __device__ bool mnp_reflect(water_info *w, MNP_info *mnp, int num_mnps, GPUData 
     return retValue;
 }
 
-__device__ water_info rand_displacement(int tid, int tStep, water_info *w, GPUData &d) {
+__device__ water_info rand_displacement(water_info *w, t_rands *r_nums, GPUData &d) {
     water_info disp;
-    double norm =
-        d.normal_doubles[tStep * d.num_waters * num_normal_doubles
-        + tid * num_normal_doubles
-        + 0];
-    int baseU = tStep * d.num_waters * 4 + tid * 4;
+    double norm = *(r_nums->norm);
 
-    disp.x = d.uniform_doubles[baseU] * 2 - 1.0;
-    disp.y = d.uniform_doubles[baseU + 1] * 2 - 1.0;
-    disp.z = d.uniform_doubles[baseU + 2] * 2 - 1.0;
+    disp.x = *(r_nums->uniform + 0) * 2 - 1.0;
+    disp.y = *(r_nums->uniform + 1) * 2 - 1.0;
+    disp.z = *(r_nums->uniform + 2) * 2 - 1.0;
 
     if(w->in_cell) {
         norm *= d.in_stdev;
@@ -368,12 +380,9 @@ __device__ void boundary_conditions(water_info *w, GPUData &d) {
     w->z = fmod(w->z + d.bound, d.bound);
 }
 
-__device__ void accumulatePhase(water_info *w, gpu_node* voxel, int &tStep, int &tid, GPUData &d) {
+__device__ void accumulatePhase(water_info *w, gpu_node* voxel, t_rands *r_nums, GPUData &d) {
     double B = get_field(w, voxel, d);
-    double nD =
-        d.normal_doubles[tStep * d.num_waters * num_normal_doubles
-        + tid * num_normal_doubles
-        + 0];
+    double nD = * (r_nums->norm + 1);
 
     // If inside a cell, add a random phase kick.
     w->phase += (w->in_cell) * nD * d.phase_stdev;
@@ -381,7 +390,7 @@ __device__ void accumulatePhase(water_info *w, gpu_node* voxel, int &tStep, int 
 }
 // END PHASE ACCUMULATION FUNCTIONS
 
-__device__ void sumMagnetizations(double *input, int timepoint, GPUData &d) {
+__device__ void sumMagnetizations(double* input, int timepoint, GPUData &d) {
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
     int cacheIndex = threadIdx.x;
     int i = blockDim.x/2;
@@ -415,13 +424,17 @@ __global__ void simulateWaters(GPUData d)  {
         updateNearest(&w, d);
     }
 
+    struct t_rands r_nums;
+    r_nums.uniform = d.uniform_doubles + tid * num_uniform_doubles;
+    r_nums.norm = d.normal_doubles + tid * num_normal_doubles;
+
     for(int i = 0; i < d.timesteps; i++) {
 
         if(tid < d.num_waters) {
             x++;
             water_info init = w;
 
-            water_info disp = rand_displacement(tid, i, &w, d);
+            water_info disp = rand_displacement(&w, &r_nums, d);
             w.x += disp.x;
             w.y += disp.y;
             w.z += disp.z;
@@ -435,7 +448,7 @@ __global__ void simulateWaters(GPUData d)  {
                 w = init;
             }
 
-            accumulatePhase(&w, voxel, i, tid, d);
+            accumulatePhase(&w, voxel, &r_nums, d);
 
             if(((startTime + i) % (2 * d.tcp)) == d.tcp) {
                 w.phase *= -1;
@@ -450,6 +463,8 @@ __global__ void simulateWaters(GPUData d)  {
         if((startTime + i) % d.pfreq == 0) {
             sumMagnetizations(mags, i / d.pfreq, d);
         }
+        r_nums.uniform += d.num_waters * num_uniform_doubles;
+        r_nums.norm += d.num_waters * num_normal_doubles;
     }
 
     __syncthreads();
@@ -526,8 +541,6 @@ void simulateWaters(std::string filename) {
     // Allocations: Perform all allocations here
     HANDLE_ERROR(cudaMalloc((void **) &(d.waters),
         num_water * sizeof(water_info)));
-    HANDLE_ERROR(cudaMalloc((void **) &(dev_lattice),
-        num_cells * sizeof(Triple)));
     HANDLE_ERROR(cudaMalloc((void **) &(d.flags),
         num_water * sizeof(int)));
     HANDLE_ERROR(cudaMalloc((void **) &d.uniform_doubles,
