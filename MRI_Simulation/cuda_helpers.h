@@ -4,7 +4,9 @@
 #include <cstdio>
 #include <vector>
 #include "rand_walk.h"
+#include "fcc_diffusion.h"
 #include "octree.h"
+#include "cuda.h"
 
 typedef struct gpu_node {
     uint64_t mc;        // Mocton code of node; leaf if leftmost bit is set
@@ -60,6 +62,7 @@ typedef struct GPUData {
     // Physical constants
     double g;
     double tau;
+    double phase_stdev;
 
     // Related to the GPU's random number resources
     double* uniform_doubles;

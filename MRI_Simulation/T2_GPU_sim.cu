@@ -2,9 +2,12 @@
 #include <iostream>
 #include <fstream>
 #include <ctime>
+#include <string>
+
+#include "cuda.h"
 
 #include "parameters.h"
-#include "cuda_sim.cu"
+#include "cuda_sim.h"
 
 using namespace std;
 
@@ -34,6 +37,6 @@ std::string generate_base_filename()
 }
 
 int main(int argc, char** argv) {
-    string fName = generate_base_filename;
+    std::string fName = generate_base_filename();
     simulateWaters(fName);
 }

@@ -97,9 +97,9 @@ void FCC::initializeCells(XORShift<> &gen) {
         double x, y, z;
         while(invalid) {
             invalid = false;
-            double x = cell_r + gen.rand_pos_double() * (bound - 2 * cell_r);
-            double y = cell_r + gen.rand_pos_double() * (bound - 2 * cell_r);
-            double z = cell_r + gen.rand_pos_double() * (bound - 2 * cell_r);
+            x = cell_r + gen.rand_pos_double() * (bound - 2 * cell_r);
+            y = cell_r + gen.rand_pos_double() * (bound - 2 * cell_r);
+            z = cell_r + gen.rand_pos_double() * (bound - 2 * cell_r);
 
             // Check against overlap with other cells
             for(int j = 0; j < i; j++) {
@@ -177,6 +177,8 @@ std::vector<MNP_info> *FCC::init_mnps() {
     for(int i = 0; i < num_cells; i++) {
         mnps->emplace_back(fcc[i][0], fcc[i][1], fcc[i][2], 0, mmoment);
     }
+
+    apply_bcs_on_mnps(mnps);
     return mnps;
 }
 
@@ -198,226 +200,6 @@ int FCC::checkLatticeContainment(double x, double y, double z) {
    }
    return containCell;
 }
-
-#ifdef UNCLUSTERED
-/*
- * Initializes the specified number of individaul, unclustered magnetic
- * nanoparticles all in extracellular space.
- */
-std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
-{
-    std::vector<MNP_info> *mnps = new std::vector<MNP_info>;
-    for (int i = 0; i < num_mnps; i++)
-    {
-        double x, y, z;
-        bool invalid = true;
-
-        // keep generating (x,y,z) coordinates until we get an extracellular one
-        // that doesn't overlap with other nanoparticles
-        while (invalid)
-        {
-            x = gen.rand_pos_double() * bound;
-            y = gen.rand_pos_double() * bound;
-            z = gen.rand_pos_double() * bound;
-            invalid = false;
-
-            // re-throw if the nanoparticle is inside/outside a cell (depends on flag)
-            for (int j = 0; j < num_cells && !invalid; j++)
-            {
-                double dx = x - fcc[j][0];
-                double dy = y - fcc[j][1];
-                double dz = z - fcc[j][2];
-
-                // Check for invalid MNP's (overlapping with cell boundaries,
-                // not in desired intracellular or extracellular locations, and
-                // set a flag to rethrow if needed)
-#if defined EXTRACELLULAR
-                if (NORMSQ(dx, dy, dz) < pow(cell_r + mnp_radius, 2)) {
-                    invalid = true;
-                }
-#elif defined INTRACELLULAR
-                if ((checkLatticeContainment(x, y, z) == -1) ||
-                    checkLatticeOverlap(x, y, z, mnp_radius)) {
-                    invalid = true;
-                }
-// Just check for cell boundary overlap in this case
-#elif defined INTRA_EXTRA
-                if ((NORMSQ(dx, dy, dz) > pow(cell_r - mnp_radius, 2))
-                    && (NORMSQ(dx, dy, dz) < pow(cell_r + mnp_radius, 2)))
-                    invalid = true;
-#endif
-            }
-
-            // re-throw if the nanoparticle overlaps with another nanoparticle
-            std::vector<MNP_info>::iterator curr;
-            for (curr = mnps->begin(); curr != mnps->end() && !invalid; curr++)
-            {
-                double dx = x - curr->x;
-                double dy = y - curr->y;
-                double dz = z - curr->z;
-                if (NORMSQ(dx, dy, dz) < pow(2*mnp_radius, 2))
-                    invalid = true;
-            }
-        }
-
-        // If the flag is set, factor in the new lipid envelope
-        double radius = mnp_radius;
-#ifdef LIPID_ENVELOPE
-        if(checkLatticeContainment(x, y, z) != -1)
-            radius += lipid_width;
-#endif
-        mnps->emplace_back(x, y, z, radius, mmoment);
-    }
-
-#ifdef DEBUG_MNPS
-    std::ofstream out_file;
-    out_file.open("T2_sim_MNPs_unclustered.csv");
-    out_file << "x,y,z,r,M" << std::endl;
-    std::vector<MNP_info>::iterator i;
-    for (i = mnps->begin(); i < mnps->end(); i++)
-    {
-        out_file << i->x << "," << i->y << "," << i->z << "," << i->r << ",";
-        out_file << i->M << std::endl;
-    }
-    out_file.close();
-#endif /* DEBUG_MNPS */
-
-    print_mnp_stats(mnps);
-    apply_bcs_on_mnps(mnps);
-    return mnps;
-}
-/* endif UNCLUSTERED */
-#elif defined CLUSTERED
-/*
- * Initializes the magnetic nanoparticle clusters in different cells of the
- * lattice. There is a 50% chance a cell has no MNPs, and an equal chance that
- * it is any of the other types. Constrained such that the final [Fe] is the
- * same as the extracellular model.
- */
-std::vector<MNP_info> *FCC::init_mnps(XORShift<> &gen)
-{
-    /* Magnetic moments established by HD on NV adjusted using SQUID magneto-
-     * metry for saturation magnetization. Each Cell is an array of the magnetic
-     * moments of the enclosed nanoparticles.*/
-    std::vector<double> cells[CELL_TYPES];
-    cells[0] = {5.35e-14/3.33, 1.688e-13/3.33};
-    cells[1] = {1.72e-13/3.33, 8.50e-13/3.33, 1.200e-12/3.33, 2.6e-14/3.33,\
-        1.7e-14/3.33, 1.7e-14/3.33, 7e-15/3.33, 1.9e-14/3.33};
-    cells[2] = {1.76e-14/3.33, 2.3e-15/3.33, 1.5e-15/3.33, 1.531e-13/3.33};
-    cells[3] = {1.126e-15*3.33, 4.68e-16*3.33};
-    cells[4] = {2.129e-15*3.33, 3.653e-15*3.33};
-    cells[5] = {2.096e-15*3.33,1.68e-15*3.33,2.3e-16*3.33};
-    //cells[6] = {0.3356e-11/3.33, 0.0617e-11/3.33, 0.1249e-11/3.33, 0.0197e-11/3.33};
-    std::vector<MNP_info> *mnps = new std::vector<MNP_info>;
-
-    std::uniform_real_distribution<> dist(1 - (1/prob_labeled), 1);
-    for (int i = 0; i < num_cells; i++)
-    {
-        double coin = dist(gen);
-
-        /* Give each different MNP distribution an equal chance of occupying
-         * a given cell. There is a preset chance that the cell is labeled at
-         * all. */
-        for (int j = CELL_TYPES - 1; j >= 0; j--)
-        {
-            if (coin > (double)j / (double)CELL_TYPES)
-            {
-                for (unsigned k = 0; k < cells[j].size(); k++)
-                {
-                    double M = cells[j][k];
-                    double r = pow(mnp_pack*M/(1.6e-15), 1.0/3.0) * mnp_radius;
-                    double x, y, z;
-
-                    /* Keep re-generating the center for the MNP in question
-                     * until the MNP does not overlap with any other MNPs that
-                     * have already been initialized. */
-                    bool invalid = true;
-                    while (invalid)
-                    {
-                        invalid = false;
-#ifdef INTRACELLULAR
-                        double norm = gen.rand_pos_double() * (cell_r);
-                        water_info loc = rand_displacement(norm, gen);
-                        x = loc.x + fcc[i][0];
-                        y = loc.y + fcc[i][1];
-                        z = loc.z + fcc[i][2];
-#elif defined EXTRACELLULAR
-#ifdef THROW_FREE // Throw cluster anywhere in extracellular space - the check
-                  // against cell containment occurs after the branch
-                        x = gen.rand_pos_double() * bound;
-                        y = gen.rand_pos_double() * bound;
-                        z = gen.rand_pos_double() * bound;
-
-#else // Throw the particle within a certain vicinity of the labeled cell
-                        double norm = cell_r * (1 + gen.rand_pos_double()
-                            * (u_throw_coeff - 1));
-                        water_info loc = rand_displacement(norm, gen);
-                        x = loc.x + fcc[i][0];
-                        y = loc.y + fcc[i][1];
-                        z = loc.z + fcc[i][2];
-#endif
-                        // Re-throw in case of cell containment, for both cases
-                        // THROW_FREE set and unset
-                        if(checkLatticeContainment(x, y, z) != -1)
-                            invalid = true;
-#elif defined INTRA_EXTRA
-                        double norm = gen.rand_pos_double() * cell_r * u_throw_coeff;
-                        water_info loc = rand_displacement(norm, gen);
-                        x = loc.x + fcc[i][0];
-                        y = loc.y + fcc[i][1];
-                        z = loc.z + fcc[i][2];
-
-                        // If the MNP center occurs inside ANOTHER cell,
-                        // check and re-throw
-                        if(checkLatticeContainment(x, y, z) != -1 &&
-                            checkLatticeContainment(x, y, z) != i)
-                            invalid = true;
-#endif
-                        std::vector<MNP_info>::iterator m, start = mnps->begin();
-                        for (m = start; m != mnps->end() && !invalid; m++)
-                        {
-                            double dx = x - m->x;
-                            double dy = y - m->y;
-                            double dz = z - m->z;
-                            if (NORMSQ(dx, dy, dz) < pow(r + m->r, 2))
-                                invalid = true;
-                        }
-                    }
-
-                    /* Only actually place MNP in lattice if its center is
-                     * inside the defined space (so we don't artificially
-                     * increase MNP density via periodic boundary conditions) */
-                    if (x  < bound && x > 0 && y < bound && y > 0 &&
-                        z < bound && z > 0) {
-#ifdef LIPID_ENVELOPE
-                        if(checkLatticeContainment(x, y, z) != -1)
-                            r += lipid_width;
-#endif
-                        mnps->emplace_back(x, y, z, r, M);
-                    }
-                }
-                break; // cell occupied -- don't try to fill it w/ more MNPs
-            }
-        }
-    }
-#ifdef DEBUG_MNPS
-    std::ofstream out_file;
-    out_file.open("T2_sim_MNPs_clustered.csv");
-    out_file << "x,y,z,r,M" << std::endl;
-    std::vector<MNP_info>::iterator i;
-    for (i = mnps->begin(); i < mnps->end(); i++)
-    {
-        out_file << i->x << "," << i->y << "," << i->z << "," << i->r << ",";
-        out_file << i->M << std::endl;
-    }
-    out_file.close();
-#endif /* DEBUG_MNPS */
-
-    print_mnp_stats(mnps);
-    apply_bcs_on_mnps(mnps);
-    return mnps;
-}
-#endif /* CLUSTERED */
 
 /*
  * Determines the cell closest to the water molecule in question.

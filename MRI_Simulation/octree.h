@@ -27,7 +27,10 @@ typedef struct oct_node {
     uint64_t mc;        // Mocton code of node; leaf if leftmost bit is set
     B_idx child[8];     // child offsets (internal) or child B fields (leaves)
     std::vector<MNP_info> *resident=NULL;  // MNPs resident in this oct_node
-    oct_node(uint64_t mc) : mc(mc) {}
+    double correction;
+    oct_node(uint64_t mc) : mc(mc) {
+      correction = 0;
+    }
 } oct_node;
 
 /* The class encapsulating the entire octree. The relevant traversals and
@@ -39,7 +42,7 @@ class Octree
     Octree(double max_product, double max_g, double min_g, XORShift<> &gen,\
             std::vector<MNP_info> *mnps);
     ~Octree();
-    
+
     int min_depth, max_depth;
 
     /* The octree itself, an array of all 8^min_depth vectorized subtrees */

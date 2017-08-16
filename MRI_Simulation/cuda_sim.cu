@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <stdlib.h>
+#include <string>
 
 #include <vector>
 #include <fstream>
@@ -27,9 +28,9 @@ const double g = 42.5781e6;             // gyromagnetic ratio in MHz/T
 const int pfreq = (int)(1e-3/tau);      // print net magnetization every 1us
 
 // Each kernel execution handles AT MOST this many timesteps
-const int sprintSteps = 10000;
-const int num_uniform_doubles = 4; // # of uniform doubles per water per tstep
-const int num_normal_doubles = 2;  // # of normal  doubles per water per tstep
+const int sprintSteps = 20000;
+#define num_uniform_doubles 4 // # of uniform doubles per water per tstep
+#define num_normal_doubles 2  // # of normal  doubles per water per tstep
 
 __constant__ Triple dev_lattice[num_cells];
 
@@ -53,17 +54,14 @@ inline void copyToHost(void* dest, void* source, long long int size) {
 
 //==============================================================================
 
-__device__ double dipole_field(double dx, double dy, double dz, double M)
+__device__ double dipole_field(double dx, double dy, double dz, double M, GPUData &d)
 {
     double sqDist = NORMSQ(dx, dy, dz);
     double divisor = sqDist * sqDist * sqrt(sqDist);
-    return (sqDist < cell_r * cell_r) * M * 1e11 * (2*dz*dz - dx*dx - dy*dy) / divisor;
+    return (sqDist > d.cell_r * d.cell_r) * M * 1e11 * (2*dz*dz - dx*dx - dy*dy) / divisor;
 }
 
 __device__ uint64_t morton_code(int depth, double &x, double &y, double &z, GPUData &d) {
-
-    //double size = pow(2.0, depth);
-    //double size = exp2((double) depth);
     uint64_t size = 1 << (depth);
     uint32_t idx_x = floor(x / d.bound * size);
     uint32_t idx_y = floor(y / d.bound * size);
@@ -143,7 +141,7 @@ __device__ double get_field(water_info *w, gpu_node* leaf, GPUData &d) {
     // add in contributions from resident MNPs zeroed out during construction
     for(int i = 0; i < leaf->numResidents; i++) {
         MNP_info *np = leaf->resident + i;
-        B += dipole_field(wx - np->x, wy - np->y, wz - np->z, np->M);
+        B += dipole_field(wx - np->x, wy - np->y, wz - np->z, np->M, d);
     }
 
     return B;
@@ -279,6 +277,7 @@ void setParameters(GPUData &d) {
     d.bound = bound;
     d.pfreq = pfreq;
     d.hashDim = hashDim;
+    d.phase_stdev = phase_stdev;
 }
 
 __device__ void updateNearest(water_info *w, GPUData &d) {
@@ -338,7 +337,7 @@ __device__ bool mnp_reflect(water_info *w, MNP_info *mnp, int num_mnps, GPUData 
 __device__ water_info rand_displacement(int tid, int tStep, water_info *w, GPUData &d) {
     water_info disp;
     double norm =
-        d.normal_doubles[tStep * d.num_waters * d.num_normal_doubles
+        d.normal_doubles[tStep * d.num_waters * num_normal_doubles
         + tid * num_normal_doubles
         + 0];
     int baseU = tStep * d.num_waters * 4 + tid * 4;
@@ -369,15 +368,15 @@ __device__ void boundary_conditions(water_info *w, GPUData &d) {
     w->z = fmod(w->z + d.bound, d.bound);
 }
 
-__device__ void accumulatePhase(water_info *w, gpu_node* voxel, GPUData &d) {
+__device__ void accumulatePhase(water_info *w, gpu_node* voxel, int &tStep, int &tid, GPUData &d) {
     double B = get_field(w, voxel, d);
     double nD =
-        d.normal_doubles[tStep * d.num_waters * d.num_normal_doubles
+        d.normal_doubles[tStep * d.num_waters * num_normal_doubles
         + tid * num_normal_doubles
         + 0];
 
     // If inside a cell, add a random phase kick.
-    w->phase += (w->in_cell) * nD * phase_stdev;
+    w->phase += (w->in_cell) * nD * d.phase_stdev;
     w->phase += B * 2 * M_PI * d.g * d.tau * 1e-3;
 }
 // END PHASE ACCUMULATION FUNCTIONS
@@ -436,7 +435,7 @@ __global__ void simulateWaters(GPUData d)  {
                 w = init;
             }
 
-            accumulatePhase(&w, voxel, d);
+            accumulatePhase(&w, voxel, i, tid, d);
 
             if(((startTime + i) % (2 * d.tcp)) == d.tcp) {
                 w.phase *= -1;
@@ -486,8 +485,9 @@ void destroyLookupDevice(GPUData &d) {
     delete[] d.localLookup;
 }
 
-void simulateWaters(string filename) {
+void simulateWaters(std::string filename) {
     cout << "Starting GPU Simulation..." << endl;
+    cout << "Printing to: " << filename << endl;
     ofstream fout(filename);
 
     cudaEvent_t start, stop;
@@ -501,7 +501,7 @@ void simulateWaters(string filename) {
 
     FCC lattice(D_cell, D_extra, P_expr, gen);
     vector<MNP_info> *mnps = lattice.init_mnps();
-    water_info *waters = lattice.init_molecules(num_water gen);
+    water_info *waters = lattice.init_molecules(num_water,gen);
     Triple* linLattice = lattice.linearLattice();
 
     // Initialize the octree
@@ -564,7 +564,8 @@ void simulateWaters(string filename) {
 
     // Run the kernel in sprints due to memory limits and timeout issues
     double time = 0;
-    for(int i = 0; i < 6700; i++) {
+    fout << time << "," << num_water << endl;
+    for(int i = 0; i < (t / sprintSteps); i++) {
         cout << "Starting sprint " << (i+1) << "." << endl;
         getUniformDoubles(totalUniform, d.uniform_doubles);
         getNormalDoubles(totalNormal, d.normal_doubles);
@@ -588,7 +589,7 @@ void simulateWaters(string filename) {
 
         bool success = true;
         for(int i = 0; i < num_water; i++) {
-            if(flags[i] != t)
+            if(flags[i] != sprintSteps)
                 success = false;
         }
         cout << "Success State: " << success << endl << "===========" << endl;
@@ -598,14 +599,13 @@ void simulateWaters(string filename) {
             num_blocks * (t / pfreq) * sizeof(double),
             cudaMemcpyDeviceToHost));
 
-        for(int j = 0; j < t / pfreq; j++) {
+        for(int j = 0; j < sprintSteps / pfreq; j++) {
             double magSum = 0;
             for(int k = 0; k < num_blocks; k++) {
                 magSum += magnetizations[j * num_blocks + k];
             }
-            fout << time << "," << magSum << endl;
-
             time += 1e-3;
+            fout << time << "," << magSum << endl;
         }
     }
 
