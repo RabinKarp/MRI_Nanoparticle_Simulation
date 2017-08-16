@@ -29,7 +29,7 @@ const int pfreq = (int)(1e-3/tau);      // print net magnetization every 1us
 // Each kernel execution handles AT MOST this many timesteps
 const int sprintSteps = 10000;
 const int num_uniform_doubles = 4; // # of uniform doubles per water per tstep
-const int num_normal_doubles = 1;  // # of normal  doubles per water per tstep
+const int num_normal_doubles = 2;  // # of normal  doubles per water per tstep
 
 __constant__ Triple dev_lattice[num_cells];
 
@@ -57,7 +57,7 @@ __device__ double dipole_field(double dx, double dy, double dz, double M)
 {
     double sqDist = NORMSQ(dx, dy, dz);
     double divisor = sqDist * sqDist * sqrt(sqDist);
-    return M * 1e11 * (2*dz*dz - dx*dx - dy*dy) / divisor;
+    return (sqDist < cell_r * cell_r) * M * 1e11 * (2*dz*dz - dx*dx - dy*dy) / divisor;
 }
 
 __device__ uint64_t morton_code(int depth, double &x, double &y, double &z, GPUData &d) {
@@ -281,9 +281,6 @@ void setParameters(GPUData &d) {
     d.hashDim = hashDim;
 }
 
-/**
- * Trivial implementation of nearest cell finder
- */
 __device__ void updateNearest(water_info *w, GPUData &d) {
     double cubeLength = d.bound / d.hashDim;
     int x_idx = w->x / cubeLength;
@@ -340,7 +337,10 @@ __device__ bool mnp_reflect(water_info *w, MNP_info *mnp, int num_mnps, GPUData 
 
 __device__ water_info rand_displacement(int tid, int tStep, water_info *w, GPUData &d) {
     water_info disp;
-    double norm = d.normal_doubles[tStep * d.num_waters + tid];
+    double norm =
+        d.normal_doubles[tStep * d.num_waters * d.num_normal_doubles
+        + tid * num_normal_doubles
+        + 0];
     int baseU = tStep * d.num_waters * 4 + tid * 4;
 
     disp.x = d.uniform_doubles[baseU] * 2 - 1.0;
@@ -371,6 +371,13 @@ __device__ void boundary_conditions(water_info *w, GPUData &d) {
 
 __device__ void accumulatePhase(water_info *w, gpu_node* voxel, GPUData &d) {
     double B = get_field(w, voxel, d);
+    double nD =
+        d.normal_doubles[tStep * d.num_waters * d.num_normal_doubles
+        + tid * num_normal_doubles
+        + 0];
+
+    // If inside a cell, add a random phase kick.
+    w->phase += (w->in_cell) * nD * phase_stdev;
     w->phase += B * 2 * M_PI * d.g * d.tau * 1e-3;
 }
 // END PHASE ACCUMULATION FUNCTIONS
@@ -400,7 +407,6 @@ __global__ void simulateWaters(GPUData d)  {
     water_info w;
     gpu_node *voxel;
 
-
     int x = 0;
 
     if(tid < d.num_waters) {
@@ -426,7 +432,7 @@ __global__ void simulateWaters(GPUData d)  {
 
             // Check cell boundary / MNP reflection
 
-            if(cell_reflect(&init, &w, i, d) || mnp_reflect(&w, voxel->resident, voxel->numResidents,d)) {
+            if(cell_reflect(&init, &w, i, d)) {
                 w = init;
             }
 
@@ -480,11 +486,10 @@ void destroyLookupDevice(GPUData &d) {
     delete[] d.localLookup;
 }
 
-int main(void) {
+void simulateWaters(string filename) {
     cout << "Starting GPU Simulation..." << endl;
-    ofstream fout("test_output.csv");
+    ofstream fout(filename);
 
-    FCC lattice(D_cell, D_extra, P_expr);
     cudaEvent_t start, stop;
 
     // Initialize PRNG seed for MNPs and waters
@@ -493,8 +498,10 @@ int main(void) {
 
     // The simulation has 3 distinct components: the lattice, the water
     // molecules, and the nanoparticles
-    vector<MNP_info> *mnps = lattice.init_mnps(gen);
-    water_info *waters = lattice.init_molecules(bound, num_water, mnps, gen);
+
+    FCC lattice(D_cell, D_extra, P_expr, gen);
+    vector<MNP_info> *mnps = lattice.init_mnps();
+    water_info *waters = lattice.init_molecules(num_water gen);
     Triple* linLattice = lattice.linearLattice();
 
     // Initialize the octree

@@ -6,12 +6,6 @@
 #include "rand_walk.h"
 #include "octree.h"
 
-struct Triple {
-    double x;
-    double y;
-    double z;
-};
-
 typedef struct gpu_node {
     uint64_t mc;        // Mocton code of node; leaf if leftmost bit is set
     B_idx child[8];     // child offsets (internal) or child B fields (leaves)

@@ -161,14 +161,16 @@ double Octree::get_field(water_info *w, oct_node *leaf)
 
 /*
  * Determines if a nanoparticle resides in the space encompassed by the node
- * with bottom left front corner (x, y, z) and side length g.
+ * with bottom left front corner (x, y, z) and side length g. Changed for the
+ * revised code to include MNPs within a CELL radius, not a scale multiple
+ * of the cluster radius.
  */
 bool Octree::MNP_in_space(MNP_info *mnp, double x, double y, double z, double g)
 {
     double dx = x + g/2 - mnp->x;
     double dy = y + g/2 - mnp->y;
     double dz = z + g/2 - mnp->z;
-    return NORMSQ(dx, dy, dz) < pow(g/2*sqrt(3) + scale*mnp->r, 2);
+    return NORMSQ(dx, dy, dz) < pow(g/2*sqrt(3) + cell_r, 2);
 }
 
 /*

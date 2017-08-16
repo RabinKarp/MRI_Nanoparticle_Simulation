@@ -139,51 +139,6 @@ void thread_func(const int tid, Octree *tree, water_info *molec, FCC *lattice)
 }
 
 /*
- * Generates a detailed filename for an output file, containing information
- * about the parameters used to generate it.
- */
-std::string generate_base_filename()
-{
-    std::string filename("tau=");
-    filename += std::to_string((unsigned)(tau * 1e9));
-    filename += "ps_T-e=";
-    filename += std::to_string((unsigned)(2*taucp));
-    filename += "ms_pct-labeled=";
-    filename += std::to_string((unsigned)(100*prob_labeled));
-
-#ifdef UNCLUSTERED
-    filename += "_unclustered";
-#else
-    filename += "_clustered";
-    if (mnp_pack < 2.99)
-        filename += "_tight-mnps";
-#endif
-    if (fcc_pack > 1.01)
-        filename += "_loose-cells";
-
-#ifdef EXTRACELLULAR
-    filename += "_extracellular";
-#elif defined INTRACELLULAR
-    filename += "_intracellular";
-#elif defined INTRA_EXTRA
-    filename += "_intra_extra";
-#endif
-
-#ifdef EXPLICIT
-    filename += "_ex_";
-#endif
-
-#ifndef FULL_BOUNDARIES
-    filename += "_border=";
-    filename += std::to_string((unsigned)(border));
-    filename += "um_";
-#endif
-
-    filename += std::to_string((unsigned)(time(NULL)));
-    return filename;
-}
-
-/*
  * Use some number of threads (specified at the top of this file) to simulate
  * the diffusion of some number of water molecules (specified at the top of the
  * file fcc_diffusion.h) through a B field for some number of time steps (also
@@ -220,8 +175,8 @@ int main(void)
         XORShift<> gen(time(NULL) + rd());
 
         // Initialize FCC lattice and octree
-        FCC *lattice = new FCC(D_cell, D_extra, P_expr);
-        std::vector<MNP_info> *mnps = lattice->init_mnps(gen);
+        FCC *lattice = new FCC(D_cell, D_extra, P_expr, gen);
+        std::vector<MNP_info> *mnps = lattice->init_mnps();
         double max_product = 2e-6, max_g = 5, min_g = .002;
         uint64_t start = time(NULL);
         Octree *tree = new Octree(max_product, max_g, min_g, gen, mnps);
@@ -238,7 +193,7 @@ int main(void)
         // Initialize water molecules
         for (int j = 0; j <= num_threads * (i+1); j++)
             gen.jump();
-        water_info *w = lattice->init_molecules(bound, num_water, mnps, gen);
+        water_info *w = lattice->init_molecules(num_water, gen);
 
     #ifdef DEBUG_DIFF
         // initialize starting positions for all molecules
