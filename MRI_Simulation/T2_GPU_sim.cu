@@ -33,6 +33,7 @@ std::string generate_base_filename()
 #endif
 
     filename += std::to_string((unsigned)(time(NULL)));
+    filename += ".csv";
     return filename;
 }
 

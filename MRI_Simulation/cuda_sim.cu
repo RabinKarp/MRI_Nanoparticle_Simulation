@@ -26,14 +26,12 @@ struct t_rands {
     double *norm;
 };
 
-#define threads_per_block 128
 const int num_blocks = (num_water + threads_per_block - 1) / threads_per_block;
 
 const double g = 42.5781e6;             // gyromagnetic ratio in MHz/T
-const int pfreq = (int)(1e-3/tau);      // print net magnetization every 1us
+const double pInt = 1e-3;
+const int pfreq = (int)(pInt/tau);      // print net magnetization every 1us
 
-// Each kernel execution handles AT MOST this many timesteps
-const int sprintSteps = 20000;
 #define num_uniform_doubles 4 // # of uniform doubles per water per tstep
 #define num_normal_doubles 2  // # of normal  doubles per water per tstep
 
@@ -617,7 +615,7 @@ void simulateWaters(std::string filename) {
             for(int k = 0; k < num_blocks; k++) {
                 magSum += magnetizations[j * num_blocks + k];
             }
-            time += 1e-3;
+            time += pInt;
             fout << time << "," << magSum << endl;
         }
     }
