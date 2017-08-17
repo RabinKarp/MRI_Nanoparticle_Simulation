@@ -3,6 +3,7 @@
 #define M_PI           3.14159265358979323846
 
 #include "cuda_helpers.h"
+#include "cuda_sim.h"
 
 #include <stdio.h>
 #include <time.h>
@@ -34,28 +35,6 @@ const int pfreq = (int)(pInt/tau);      // print net magnetization every 1us
 
 #define num_uniform_doubles 4 // # of uniform doubles per water per tstep
 #define num_normal_doubles 2  // # of normal  doubles per water per tstep
-
-//==============================================================================
-// CUDA Utility functions
-//==============================================================================
-
-inline void* cudaAllocate(long long int size) {
-    void *ptr;
-    HANDLE_ERROR(cudaMalloc((void **) &ptr, size));
-    return ptr;
-}
-
-inline void copyToDevice(void* dest, void* source, long long int size) {
-    HANDLE_ERROR(cudaMemcpy(dest, source,
-        size,
-        cudaMemcpyHostToDevice));
-}
-
-inline void copyToHost(void* dest, void* source, long long int size) {
-    HANDLE_ERROR(cudaMemcpy(dest, source,
-        size,
-        cudaMemcpyDeviceToHost));
-}
 
 //==============================================================================
 // Octree-related functions
