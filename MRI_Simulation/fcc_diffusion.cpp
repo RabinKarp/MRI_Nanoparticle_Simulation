@@ -90,9 +90,9 @@ FCC::~FCC() {
  * Initialize a single large cell at the center of the simulation bound.
  */
 void FCC::initializeCells(XORShift<> &gen) {
-    fcc[i][0] = bound / 2;
-    fcc[i][1] = bound / 2;
-    fcc[i][2] = bound / 2;
+    fcc[0][0] = bound / 2;
+    fcc[0][1] = bound / 2;
+    fcc[0][2] = bound / 2;
 }
 
 /*
@@ -108,9 +108,9 @@ water_info *FCC::init_molecules(int n, XORShift<> &gen)
 
     for (int i = 0; i < n; i++)
     {
-        double x = bound / 2;
-        double y = bound / 2;
-        double z = bound / 2;
+        double x = 1;
+        double y = 1;
+        double z = 1;
 
         temp->x = x;
         temp->y = y;

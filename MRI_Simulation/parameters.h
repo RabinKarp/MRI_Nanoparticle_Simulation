@@ -44,7 +44,6 @@ const int num_water = 1;             // number of waters in simulation
 
 /* Related to the cells in the simulation*/
 const int num_cells = 1;               // Number of randomly thrown cells
-const double cell_r = 2;                // cell radius in microns
 
 const double mmoment = 1.7e-15;         // Magnetic moment for each cell
 const double phase_stdev = 1.0;         // St. dev. of intracellular
@@ -52,6 +51,7 @@ const double phase_stdev = 1.0;         // St. dev. of intracellular
 
 /* Related to the simulation bounds */
 const double bound = 40;                // full box is [0, bound]^3 (microns)
+const double cell_r = bound / 2;        // cell radius in microns
 
 /* All water molecules begin the simulation in a box with dimension
    water_start_bound^3 that is centered in the middle of the larger

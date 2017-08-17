@@ -503,7 +503,7 @@ void simulateWaters(std::string filename) {
     cout << "Starting GPU Simulation..." << endl;
     cout << "Printing to: " << filename << endl;
     ofstream fout(filename);
-    ofstream debug_out("debug_file.csv");
+    ofstream debug_out("phase_accumulations.csv");
 
     cudaEvent_t start, stop;
 
@@ -558,7 +558,7 @@ void simulateWaters(std::string filename) {
     HANDLE_ERROR(cudaMalloc((void **) &(d.magnetizations),
         num_blocks * (t / pfreq) * sizeof(double)));
 
-    d.phaseKicks = cudaAllocate(sizeof(double) * sprintSteps);
+    d.phaseKicks = (double*) cudaAllocate(sizeof(double) * sprintSteps);
 
     // Initialize performance timers
     HANDLE_ERROR(cudaEventCreate(&start));
@@ -604,7 +604,7 @@ void simulateWaters(std::string filename) {
 
         // Debugging: copy back random phase kicks.
         double* phaseKicks = new double[sprintSteps];
-        cpyToHost((void*) phaseKicks, (void*) d.phaseKicks, sizeof(double) * sprintSteps);
+        copyToHost((void*) phaseKicks, (void*) d.phaseKicks, sizeof(double) * sprintSteps);
 
         for(int j = 0; j < sprintSteps; j++) {
             debug_out << time << "," << phaseKicks[j] << endl;
@@ -642,7 +642,6 @@ void simulateWaters(std::string filename) {
     delete[] linLattice;
     delete[] waters;
     delete[] magnetizations;
-    delete[] phaseKicks;
     delete mnps;
     fout.close();
 }
