@@ -78,6 +78,7 @@ typedef struct GPUData {
 
      // Memory for debugging purposes only
      int *flags;
+     double *phaseKicks;
 } GPUData;
 
 static void HandleError( cudaError_t err,

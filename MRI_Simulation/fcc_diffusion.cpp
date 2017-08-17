@@ -87,34 +87,12 @@ FCC::~FCC() {
     }
 }
 /**
- * Initializes cells within the simulation bound by randomly throwing them
- * and checking that they don't overlap with each other. If cells do overlap,
- * they are simply re-thrown.
+ * Initialize a single large cell at the center of the simulation bound.
  */
 void FCC::initializeCells(XORShift<> &gen) {
-    for(int i = 0; i < num_cells; i++) {
-        bool invalid = true;
-        double x, y, z;
-        while(invalid) {
-            invalid = false;
-            x = cell_r + gen.rand_pos_double() * (bound - 2 * cell_r);
-            y = cell_r + gen.rand_pos_double() * (bound - 2 * cell_r);
-            z = cell_r + gen.rand_pos_double() * (bound - 2 * cell_r);
-
-            // Check against overlap with other cells
-            for(int j = 0; j < i; j++) {
-                double dx = fcc[j][0] - x;
-                double dy = fcc[j][1] - y;
-                double dz = fcc[j][2] - z;
-
-                if(NORMSQ(dx, dy, dz) < 4 * cell_r * cell_r)
-                    invalid = true;
-            }
-        }
-        fcc[i][0] = x;
-        fcc[i][1] = y;
-        fcc[i][2] = z;
-    }
+    fcc[i][0] = bound / 2;
+    fcc[i][1] = bound / 2;
+    fcc[i][2] = bound / 2;
 }
 
 /*
@@ -130,9 +108,9 @@ water_info *FCC::init_molecules(int n, XORShift<> &gen)
 
     for (int i = 0; i < n; i++)
     {
-        double x = offset + gen.rand_pos_double() * water_start_bound;
-        double y = offset + gen.rand_pos_double() * water_start_bound;
-        double z = offset + gen.rand_pos_double() * water_start_bound;
+        double x = bound / 2;
+        double y = bound / 2;
+        double z = bound / 2;
 
         temp->x = x;
         temp->y = y;

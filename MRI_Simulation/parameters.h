@@ -40,10 +40,10 @@ const int sprintSteps = 25000; // Each kernel execution handles AT MOST this man
 
 
 /* Molecule and nanoparticle info */
-const int num_water = 4000;             // number of waters in simulation
+const int num_water = 1;             // number of waters in simulation
 
 /* Related to the cells in the simulation*/
-const int num_cells = 80;               // Number of randomly thrown cells
+const int num_cells = 1;               // Number of randomly thrown cells
 const double cell_r = 2;                // cell radius in microns
 
 const double mmoment = 1.7e-15;         // Magnetic moment for each cell
@@ -70,7 +70,7 @@ const double P_expr = 0.01;            // permeability in micron per ms
 
 /* Time scales and step sizes */
 const double tau = 1e-6;                // time step in ms
-const int totaltime = 40;               // total time to run for in ms - because of GPU architecture, this
+const int totaltime = 1;                // total time to run for in ms - because of GPU architecture, this
                                         // is constrained to be a discrete integer
 
 const int t = (int)(totaltime/tau);     // Total time steps

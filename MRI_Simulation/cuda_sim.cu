@@ -263,6 +263,7 @@ void finalizeGPU(GPUData &d) {
     cudaFree(d.magnetizations);
     cudaFree(d.lattice);
     cudaFree(d.time);
+    cudaFree(d.phaseKicks);
 
     destroyTree(d);
 }
@@ -378,13 +379,13 @@ __device__ void boundary_conditions(water_info *w, GPUData &d) {
     w->z = fmod(w->z + d.bound, d.bound);
 }
 
-__device__ void accumulatePhase(water_info *w, gpu_node* voxel, t_rands *r_nums, GPUData &d) {
+__device__ void accumulatePhase(water_info *w, gpu_node* voxel, t_rands *r_nums, int tStep, GPUData &d) {
     double B = get_field(w, voxel, d);
     double nD = * (r_nums->norm + 1);
-
+    double delta = (w->in_cell) * nD * d.phase_stdev + B * 2 * M_PI * d.g * d.tau * 1e-3;
+    d.phaseKicks[tStep] = delta;
     // If inside a cell, add a random phase kick.
-    w->phase += (w->in_cell) * nD * d.phase_stdev;
-    w->phase += B * 2 * M_PI * d.g * d.tau * 1e-3;
+    w->phase += delta;
 }
 // END PHASE ACCUMULATION FUNCTIONS
 
@@ -446,7 +447,7 @@ __global__ void simulateWaters(GPUData d)  {
                 w = init;
             }
 
-            accumulatePhase(&w, voxel, &r_nums, d);
+            accumulatePhase(&w, voxel, &r_nums, i, d);
 
             if(((startTime + i) % (2 * d.tcp)) == d.tcp) {
                 w.phase *= -1;
@@ -502,6 +503,7 @@ void simulateWaters(std::string filename) {
     cout << "Starting GPU Simulation..." << endl;
     cout << "Printing to: " << filename << endl;
     ofstream fout(filename);
+    ofstream debug_out("debug_file.csv");
 
     cudaEvent_t start, stop;
 
@@ -556,6 +558,8 @@ void simulateWaters(std::string filename) {
     HANDLE_ERROR(cudaMalloc((void **) &(d.magnetizations),
         num_blocks * (t / pfreq) * sizeof(double)));
 
+    d.phaseKicks = cudaAllocate(sizeof(double) * sprintSteps);
+
     // Initialize performance timers
     HANDLE_ERROR(cudaEventCreate(&start));
     HANDLE_ERROR(cudaEventCreate(&stop));
@@ -598,6 +602,16 @@ void simulateWaters(std::string filename) {
             sizeof(int) * num_water,
             cudaMemcpyDeviceToHost));
 
+        // Debugging: copy back random phase kicks.
+        double* phaseKicks = new double[sprintSteps];
+        cpyToHost((void*) phaseKicks, (void*) d.phaseKicks, sizeof(double) * sprintSteps);
+
+        for(int j = 0; j < sprintSteps; j++) {
+            debug_out << time << "," << phaseKicks[j] << endl;
+        }
+
+        delete[] phaseKicks;
+
         bool success = true;
         for(int i = 0; i < num_water; i++) {
             if(flags[i] != sprintSteps)
@@ -628,6 +642,7 @@ void simulateWaters(std::string filename) {
     delete[] linLattice;
     delete[] waters;
     delete[] magnetizations;
+    delete[] phaseKicks;
     delete mnps;
     fout.close();
 }
