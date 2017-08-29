@@ -27,8 +27,6 @@ struct t_rands {
     double *norm;
 };
 
-const int num_blocks = (num_water + threads_per_block - 1) / threads_per_block;
-
 const double g = 42.5781e6;             // gyromagnetic ratio in MHz/T
 const double pInt = 1e-3;
 const int pfreq = (int)(pInt/tau);      // print net magnetization every 1us
@@ -259,8 +257,7 @@ void setParameters(GPUData &d) {
     d.num_waters = num_water;
     d.timesteps = sprintSteps;
     d.cell_r = cell_r;
-    d.bound = bound;
-    d.nBlocks = num_blocks;
+    d.bound = bound; 
     d.g = g;
     d.tau = tau;
     d.bound = bound;
@@ -273,188 +270,18 @@ void setParameters(GPUData &d) {
 // Simulation functions
 //==============================================================================
 
-__device__ void updateNearest(water_info *w, GPUData &d) {
-    double cubeLength = d.bound / d.hashDim;
-    int x_idx = w->x / cubeLength;
-    int y_idx = w->y / cubeLength;
-    int z_idx = w->z / cubeLength;
 
-    int* nearest =
-        d.lookupTable[z_idx * d.hashDim * d.hashDim
-        + y_idx * d.hashDim
-        + x_idx];
-
-    double cDist = d.bound * d.bound * 3;
-    int cIndex = -1;
-    while(*nearest != -1) {
-        double dx = d.lattice[*nearest].x - w->x;
-        double dy = d.lattice[*nearest].y - w->y;
-        double dz = d.lattice[*nearest].z - w->z;
-
-        double dist = NORMSQ(dx, dy, dz);
-        if(NORMSQ(dx, dy, dz) < cDist) {
-            cDist = dist;
-            cIndex = *nearest;
-        }
-        nearest++;
-    }
-
-    w->in_cell = (cDist < d.cell_r * d.cell_r);
-    w->nearest = cIndex;
-}
-
-__device__ bool cell_reflect(water_info *i, water_info *f, int tStep, GPUData &d) {
-    int tid = threadIdx.x + blockIdx.x * blockDim.x;
-    double coin = d.uniform_doubles[tStep * d.num_waters * 4 + tid * 4 + 3];
-    bool flip = (i->in_cell && (! f->in_cell) && coin < d.reflectIO)
-                    || ((! i->in_cell) && f->in_cell && coin < d.reflectOI);
-    return flip;
-}
-
-__device__ bool mnp_reflect(water_info *w, MNP_info *mnp, int num_mnps, GPUData &d) {
-    bool retValue = false;
-
-    for(int i = 0; i < num_mnps; i++) {
-        MNP_info* m = mnp + i;
-        double dx = m->x - w->x;
-        double dy = m->y - w->y;
-        double dz = m->z - w->z;
-
-        if(NORMSQ(dx, dy, dz) < (m->r * m->r))
-            retValue = true;
-    }
-
-    return retValue;
-}
-
-__device__ water_info rand_displacement(water_info *w, t_rands *r_nums, GPUData &d) {
-    water_info disp;
-    double norm = *(r_nums->norm);
-
-    disp.x = *(r_nums->uniform + 0) * 2 - 1.0;
-    disp.y = *(r_nums->uniform + 1) * 2 - 1.0;
-    disp.z = *(r_nums->uniform + 2) * 2 - 1.0;
-
-    if(w->in_cell) {
-        norm *= d.in_stdev;
-    }
-    else {
-        norm *= d.out_stdev;
-    }
-
-    double nConstant = norm / sqrt(NORMSQ(disp.x, disp.y, disp.z));
-
-    disp.x *= nConstant;
-    disp.y *= nConstant;
-    disp.z *= nConstant;
-
-    return disp;
-}
-
-__device__ void boundary_conditions(water_info *w, GPUData &d) {
-    w->x = fmod(w->x + d.bound, d.bound);
-    w->y = fmod(w->y + d.bound, d.bound);
-    w->z = fmod(w->z + d.bound, d.bound);
-}
-
-__device__ void accumulatePhase(water_info *w, gpu_node* voxel, t_rands *r_nums, GPUData &d) {
-    double B = get_field(w, voxel, d);
-    double nD = * (r_nums->norm + 1);
+__device__ inline double accumulatePhase(water_info *w, gpu_node* voxel, double nD, GPUData &d) {
+    double B = get_field(w, voxel, d); 
+    double phase = 0;
 
     // If inside a cell, add a random phase kick.
-    w->phase += (w->in_cell) * nD * d.phase_stdev;
-    w->phase += B * 2 * M_PI * d.g * d.tau * 1e-3;
+    phase += (w->in_cell) * nD * d.phase_stdev;
+    phase += B * 2 * M_PI * d.g * d.tau * 1e-3;
+    
+    return phase;
 }
 // END PHASE ACCUMULATION FUNCTIONS
-
-__device__ void sumMagnetizations(double* input, int timepoint, GPUData &d) {
-    int tid = threadIdx.x + blockIdx.x * blockDim.x;
-    int cacheIndex = threadIdx.x;
-    int i = blockDim.x/2;
-    __syncthreads();
-    while(i != 0) {
-        if( (cacheIndex < i) && ((tid + i) < d.num_waters) ) {
-            input[cacheIndex] += input[cacheIndex + i];
-        }
-        __syncthreads();
-        i /= 2;
-    }
-    if(cacheIndex == 0) {
-        d.magnetizations[timepoint * d.nBlocks + blockIdx.x] = input[0];
-    }
-}
-
-__global__ void simulateWaters(GPUData d)  {
-    __shared__ double mags[threads_per_block];
-
-    int tid = threadIdx.x + blockIdx.x * blockDim.x;
-    int startTime = *d.time;
-    water_info w;
-    gpu_node *voxel;
-
-    int x = 0;
-
-    if(tid < d.num_waters) {
-        // Copy water to chip memory
-        w = d.waters[tid];
-        d.flags[tid] = -1;
-        updateNearest(&w, d);
-    }
-
-    struct t_rands r_nums;
-    r_nums.uniform = d.uniform_doubles + tid * num_uniform_doubles;
-    r_nums.norm = d.normal_doubles + tid * num_normal_doubles;
-
-    for(int i = 0; i < d.timesteps; i++) {
-
-        if(tid < d.num_waters) {
-            x++;
-            water_info init = w;
-
-            water_info disp = rand_displacement(&w, &r_nums, d);
-            w.x += disp.x;
-            w.y += disp.y;
-            w.z += disp.z;
-            boundary_conditions(&w, d);
-            updateNearest(&w, d);
-            voxel = get_voxel(&w, d);
-
-            // Check cell boundary / MNP reflection
-
-            if(cell_reflect(&init, &w, i, d)) {
-                w = init;
-            }
-
-            accumulatePhase(&w, voxel, &r_nums, d);
-
-            if(((startTime + i) % (2 * d.tcp)) == d.tcp) {
-                w.phase *= -1;
-            }
-
-            // If we need to do a reduction, copy to shared memory
-            if((startTime + i) % d.pfreq == 0)
-                mags[threadIdx.x] = cos(w.phase);
-        }
-        // Perform a memory reduction
-
-        if((startTime + i) % d.pfreq == 0) {
-            sumMagnetizations(mags, i / d.pfreq, d);
-        }
-        r_nums.uniform += d.num_waters * num_uniform_doubles;
-        r_nums.norm += d.num_waters * num_normal_doubles;
-    }
-
-    __syncthreads();
-    if(tid == 0) {
-        *d.time += d.timesteps;
-    }
-
-    // Copy the water molecule back to global memory
-    if(tid < d.num_waters) {
-        d.flags[tid] = x;
-        d.waters[tid] = w;
-    }
-}
 
 void cpyLookupDevice(int **sourceTable, GPUData &d) {
     d.localLookup = new int*[hashDim * hashDim * hashDim];
@@ -475,6 +302,20 @@ void destroyLookupDevice(GPUData &d) {
     }
     cudaFree(d.lookupTable);
     delete[] d.localLookup;
+}
+
+__global__ void simulateWaters(double* x, double* y, double* z, double* target, int len, GPUData d) {
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    if(tid < len) {
+        water_info w;
+        w.x = x[tid] * 5;
+        w.y = y[tid] * 5;
+        w.z = z[tid] * 5;
+        gpu_node *voxel = get_voxel(&w, d);
+
+        // TODO: The random double is a sham. Must fix it! 
+        double phase = accumulatePhase(&w, voxel, *x, d); 
+    }
 }
 
 void simulateWaters(std::string filename) {
@@ -533,7 +374,7 @@ void simulateWaters(std::string filename) {
 
     // Allocate the target array
     HANDLE_ERROR(cudaMalloc((void **) &(d.magnetizations),
-        num_blocks * (t / pfreq) * sizeof(double)));
+        666 * (t / pfreq) * sizeof(double)));
 
     // Initialize performance timers
     HANDLE_ERROR(cudaEventCreate(&start));
@@ -548,59 +389,32 @@ void simulateWaters(std::string filename) {
         cudaMemcpyHostToDevice));
 
     int flags[num_water];
-    double *magnetizations = new double[num_blocks * (t / pfreq)]; // Local magnetization target
+    double *magnetizations = new double[666 * (t / pfreq)]; // Local magnetization target
 
     cout << "Kernel prepped!" << endl;
 
-    // Run the kernel in sprints due to memory limits and timeout issues
-    double time = 0;
-    fout << time << "," << num_water << endl;
-    for(int i = 0; i < (t / sprintSteps); i++) {
-        cout << "Starting sprint " << (i+1) << "." << endl;
-        getUniformDoubles(totalUniform, d.uniform_doubles);
-        getNormalDoubles(totalNormal, d.normal_doubles);
+    cout << "Starting sprint " << endl;
+    getUniformDoubles(totalUniform, d.uniform_doubles);
+    getNormalDoubles(totalNormal, d.normal_doubles);
 
-        HANDLE_ERROR(cudaEventRecord(start, 0));
-        simulateWaters<<<num_blocks, threads_per_block>>>(d);
+    int bSize = 10000000;
+    p_array<double> target(bSize);
 
-        HANDLE_ERROR(cudaEventRecord(stop, 0));
-        HANDLE_ERROR(cudaEventSynchronize(stop));
+    int num_blocks = (bSize + threads_per_block - 1) / threads_per_block; 
+    Timer timer;
 
-        float elapsedTime;
-        HANDLE_ERROR(cudaEventElapsedTime(&elapsedTime, start, stop));
+    timer.cpuStart();    
+    simulateWaters<<<num_blocks, threads_per_block>>>(
+        d.uniform_doubles,
+        d.uniform_doubles + bSize,
+        d.uniform_doubles + bSize,
+        target.dp(),
+        bSize,
+        d);
+    
+    float elapsed = timer.cpuStop();
+    cout << "Parallel computation took " << elapsed << " ms" << endl;
 
-        cout << "Kernel execution complete! Elapsed time: "
-            << elapsedTime << " ms" << endl;
-
-        // Copy back the array of flags to catch any errors
-        HANDLE_ERROR(cudaMemcpy(flags, d.flags,
-            sizeof(int) * num_water,
-            cudaMemcpyDeviceToHost));
-
-        bool success = true;
-        for(int i = 0; i < num_water; i++) {
-            if(flags[i] != sprintSteps)
-                success = false;
-        }
-        cout << "Success State: " << success << endl << "===========" << endl;
-
-        // Copy back the array of magnetizations
-        HANDLE_ERROR(cudaMemcpy(magnetizations, d.magnetizations,
-            num_blocks * (t / pfreq) * sizeof(double),
-            cudaMemcpyDeviceToHost));
-
-        for(int j = 0; j < sprintSteps / pfreq; j++) {
-            double magSum = 0;
-            for(int k = 0; k < num_blocks; k++) {
-                magSum += magnetizations[j * num_blocks + k];
-            }
-            time += pInt;
-            fout << time << "," << magSum << endl;
-        }
-    }
-
-    HANDLE_ERROR(cudaEventDestroy(start));
-    HANDLE_ERROR(cudaEventDestroy(stop));
     destroyLookupDevice(d);
     finalizeGPU(d);
 
