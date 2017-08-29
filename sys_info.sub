@@ -1,0 +1,11 @@
+#PBS -S /bin/bash
+#PBS -q H30G
+#PBS -l nodes=1:ppn=16
+#PBS -l walltime=00:01:00
+
+module load gcc/5.2.0
+module load cuda/8.0
+
+cd GPUSimulation/MRI_Simulation
+
+./dev_query

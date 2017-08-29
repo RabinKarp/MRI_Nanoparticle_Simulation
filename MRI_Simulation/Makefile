@@ -1,10 +1,37 @@
-all: gpu_sim
+# Compiling local simulation files
 
-gpu_sim:
-	nvcc -std=c++11 --use_fast_math -lcurand -gencode arch=compute_35,code=compute_35 -gencode arch=compute_35,code=sm_35 T2_GPU_sim.cu cuda_sim.cu fcc_diffusion.cpp rand_walk.cpp octree.cpp -o $@ $^
+L_OBJS=T2_GPU_sim.o cuda_sim.o fcc_diffusion.o rand_walk.o octree.o 
+PARAMS=parameters.h
+#==============================================================================
+# Compiling CUDA utilities from git submodule
 
-cpu_sim:
-	g++ -std=c++11 -O2 T2_sim.cpp octree.cpp fcc_diffusion.cpp rand_walk.cpp
+UTIL_FILE=utilities/.dependencies
+# UTIL_LIST=$(shell cat ${UTIL_FILE})
+# U_OBJS=$(addprefix utilities/,$(UTIL_LIST))
+
+#==============================================================================
+OBJS=$(L_OBJS) 
+CXX=nvcc
+
+cuda_flags= -std=c++11 \
+	   -gencode arch=compute_35,code=compute_35 \
+       	   -gencode arch=compute_35,code=sm_35 \
+   	   -ccbin=icpc -lcurand --use_fast_math -restrict\
+           -Xcompiler "-pthread -O3 -mkl"
+
+all: module_loader
+
+module_loader:
+	sh ~/GPUSimulation/MRI_Simulation/build.sh	
+
+gpu_sim: $(OBJS) $(PARAMS)
+	$(CXX) $(cuda_flags) -o $@ $(OBJS) 
+
+%.o: %.cpp $(PARAMS)
+	$(CXX) -c $(cuda_flags) $< -o $@
+
+%.o: %.cu $(PARAMS)
+	$(CXX) -c $(cuda_flags) $< -o $@
 
 clean:
 	rm -f *.o gpu_sim mnp_test octree_test T2_sim  *.tmp *~ *.out *#

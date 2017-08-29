@@ -35,7 +35,7 @@ const int num_runs = 1;     // number of times to run T2 simulation
 #undef TIMED_OUTPUT         // print out a progress report every 1ms?
 
 /* Related to the CUDA kernel */
-#define threads_per_block 128
+#define threads_per_block 196 
 const int sprintSteps = 25000; // Each kernel execution handles AT MOST this many timesteps
 
 

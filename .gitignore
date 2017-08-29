@@ -24,7 +24,6 @@
 *.csv
 
 # POD Files #
-*.sub
 *.sub.*
 
 # OS generated files #
