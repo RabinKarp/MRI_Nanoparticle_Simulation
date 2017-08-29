@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include "cuda.h"
 #include "curand.h"
-#include "cuda_helpers.h"
+#include "utilities/utilities.h"
 
 using namespace std;
 

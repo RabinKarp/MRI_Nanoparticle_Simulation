@@ -2,7 +2,7 @@
 #define MAX_MNPS       1000
 #define M_PI           3.14159265358979323846
 
-#include "cuda_helpers.h"
+#include "utilities/utilities.h"
 #include "cuda_sim.h"
 
 #include <stdio.h>

@@ -1,22 +1,22 @@
 # Compiling local simulation files
 
-L_OBJS=T2_GPU_sim.o cuda_sim.o fcc_diffusion.o rand_walk.o octree.o 
+L_OBJS=T2_GPU_sim.o gpu_random.o cuda_sim.o fcc_diffusion.o rand_walk.o octree.o 
 PARAMS=parameters.h
 #==============================================================================
 # Compiling CUDA utilities from git submodule
 
 UTIL_FILE=utilities/.dependencies
-# UTIL_LIST=$(shell cat ${UTIL_FILE})
-# U_OBJS=$(addprefix utilities/,$(UTIL_LIST))
+UTIL_LIST=$(shell cat ${UTIL_FILE})
+U_OBJS=$(addprefix utilities/,$(UTIL_LIST))
 
 #==============================================================================
-OBJS=$(L_OBJS) 
+OBJS=$(L_OBJS) $(U_OBJS) 
 CXX=nvcc
 
 cuda_flags= -std=c++11 \
 	   -gencode arch=compute_35,code=compute_35 \
        	   -gencode arch=compute_35,code=sm_35 \
-   	   -ccbin=icpc -lcurand --use_fast_math -restrict\
+   	   -ccbin=icpc -lcurand -lcublas -lcusolver --use_fast_math -restrict\
            -Xcompiler "-pthread -O3 -mkl"
 
 all: module_loader

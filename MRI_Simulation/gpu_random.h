@@ -1,7 +1,6 @@
 #ifndef GPU_RANDOM
 #define GPU_RANDOM
 
-#include "gpu_random.cu"
 #include "cuda.h"
 #include "curand.h"
 
