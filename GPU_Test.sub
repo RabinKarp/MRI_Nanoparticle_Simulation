@@ -7,6 +7,6 @@ cd GPUSimulation/MRI_Simulation
 
 # Load in all requisite modules
 . modules.sh
-time ./gpu_sim
+time ./gpu_sim.out
 
 

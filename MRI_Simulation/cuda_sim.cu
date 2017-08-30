@@ -480,13 +480,14 @@ void destroyLookupDevice(GPUData &d) {
 void simulateWaters(std::string filename) {
     cout << "Starting GPU Simulation..." << endl;
     cout << "Printing to: " << filename << endl;
-    ofstream fout(filename);
-
-    cudaEvent_t start, stop;
+    ofstream fout(filename); 
 
     // Initialize PRNG seed for MNPs and waters
     std::random_device rd;
     XORShift<uint64_t> gen(time(NULL) + rd());
+
+    // Initialize GPU random number generator
+    gpu_rng gpu_rand_gen;
 
     // The simulation has 3 distinct components: the lattice, the water
     // molecules, and the nanoparticles
@@ -535,9 +536,8 @@ void simulateWaters(std::string filename) {
     HANDLE_ERROR(cudaMalloc((void **) &(d.magnetizations),
         num_blocks * (t / pfreq) * sizeof(double)));
 
-    // Initialize performance timers
-    HANDLE_ERROR(cudaEventCreate(&start));
-    HANDLE_ERROR(cudaEventCreate(&stop));
+    // Initialize performance timer
+    Timer timer;
 
     // Perform all memory copies here
     HANDLE_ERROR(cudaMemcpy(d.waters, waters,
@@ -552,22 +552,20 @@ void simulateWaters(std::string filename) {
 
     cout << "Kernel prepped!" << endl;
 
+
     // Run the kernel in sprints due to memory limits and timeout issues
+
     double time = 0;
-    fout << time << "," << num_water << endl;
     for(int i = 0; i < (t / sprintSteps); i++) {
         cout << "Starting sprint " << (i+1) << "." << endl;
-        getUniformDoubles(totalUniform, d.uniform_doubles);
-        getNormalDoubles(totalNormal, d.normal_doubles);
 
-        HANDLE_ERROR(cudaEventRecord(start, 0));
+        timer.gpuStart();
+
+        gpu_rand_gen.getUniformDoubles(totalUniform, d.uniform_doubles);
+        gpu_rand_gen.getNormalDoubles(totalNormal, d.normal_doubles);
         simulateWaters<<<num_blocks, threads_per_block>>>(d);
 
-        HANDLE_ERROR(cudaEventRecord(stop, 0));
-        HANDLE_ERROR(cudaEventSynchronize(stop));
-
-        float elapsedTime;
-        HANDLE_ERROR(cudaEventElapsedTime(&elapsedTime, start, stop));
+        float elapsedTime = timer.gpuStopSync();
 
         cout << "Kernel execution complete! Elapsed time: "
             << elapsedTime << " ms" << endl;
@@ -599,8 +597,6 @@ void simulateWaters(std::string filename) {
         }
     }
 
-    HANDLE_ERROR(cudaEventDestroy(start));
-    HANDLE_ERROR(cudaEventDestroy(stop));
     destroyLookupDevice(d);
     finalizeGPU(d);
 

@@ -25,7 +25,7 @@ module_loader:
 	sh ~/GPUSimulation/MRI_Simulation/build.sh	
 
 gpu_sim: $(OBJS) $(PARAMS)
-	$(CXX) $(cuda_flags) -o $@ $(OBJS) 
+	$(CXX) $(cuda_flags) -o $@.out $(OBJS) 
 
 %.o: %.cpp $(PARAMS)
 	$(CXX) -c $(cuda_flags) $< -o $@
