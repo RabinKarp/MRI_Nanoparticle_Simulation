@@ -303,9 +303,8 @@ __device__ void updateNearest(water_info *w, GPUData &d) {
     w->nearest = cIndex;
 }
 
-__device__ bool cell_reflect(water_info *i, water_info *f, int tStep, GPUData &d) {
-    int tid = threadIdx.x + blockIdx.x * blockDim.x;
-    double coin = d.uniform_doubles[tStep * d.num_waters * 4 + tid * 4 + 3];
+__device__ bool cell_reflect(water_info *i, water_info *f, t_rands *r_nums, GPUData &d) { 
+    double coin = *(r_nums->uniform + 4); 
     bool flip = (i->in_cell && (! f->in_cell) && coin < d.reflectIO)
                     || ((! i->in_cell) && f->in_cell && coin < d.reflectOI);
     return flip;
@@ -421,7 +420,7 @@ __global__ void simulateWaters(GPUData d)  {
 
             // Check cell boundary / MNP reflection
 
-            if(cell_reflect(&init, &w, i, d)) {
+            if(cell_reflect(&init, &w, &r_nums, d)) {
                 w = init;
             }
 
@@ -551,7 +550,6 @@ void simulateWaters(std::string filename) {
     double *magnetizations = new double[num_blocks * (t / pfreq)]; // Local magnetization target
 
     cout << "Kernel prepped!" << endl;
-
 
     // Run the kernel in sprints due to memory limits and timeout issues
 
