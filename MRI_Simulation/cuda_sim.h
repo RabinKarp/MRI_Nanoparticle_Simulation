@@ -41,7 +41,7 @@ typedef struct GPUData {
     int num_cells;
     double cell_r;
     double bound;
-    Triple* __restrict__ lattice;
+    Triple* lattice;
     int hashDim;
     int** __restrict__ lookupTable;
     int** __restrict__ localLookup;

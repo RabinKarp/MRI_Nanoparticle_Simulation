@@ -235,14 +235,6 @@ void destroyTree(GPUData &d) {
 //==============================================================================
 
 void finalizeGPU(GPUData &d) {
-    cudaFree(d.waters);
-    cudaFree(d.flags);
-    cudaFree(d.uniform_doubles);
-    cudaFree(d.normal_doubles);
-    cudaFree(d.magnetizations);
-    cudaFree(d.lattice);
-    cudaFree(d.time);
-
     destroyTree(d);
 }
 
@@ -509,50 +501,37 @@ void simulateWaters(std::string filename) {
     setParameters(d);
     d.num_mnps = mnps->size();
     initOctree(&tree, d);
-
     cout << "Allocated GPU Octree!" << endl;
+
+    // Compute number of uniform and random doubles needed for each sprint
     int totalUniform =  num_uniform_doubles * num_water * sprintSteps;
     int totalNormal = num_normal_doubles * num_water * sprintSteps;
     int initTime = 0;
+ 
+    // GPU memory allocations performed here
+    p_array<water_info> dev_waters(num_water, waters, d.waters); 
+    p_array<int> dev_flags(num_water, nullptr, d.flags);
 
-    // Allocations: Perform all allocations here
-    HANDLE_ERROR(cudaMalloc((void **) &(d.waters),
-        num_water * sizeof(water_info)));
-    HANDLE_ERROR(cudaMalloc((void **) &(d.flags),
-        num_water * sizeof(int)));
-    HANDLE_ERROR(cudaMalloc((void **) &d.uniform_doubles,
-        totalUniform*sizeof(double)));
-    HANDLE_ERROR(cudaMalloc((void **) &d.normal_doubles,
-        totalNormal*sizeof(double)));
-    HANDLE_ERROR(cudaMalloc((void **) &d.time,
-        sizeof(int)));
+    cout << "About to allocate waters and flags." << endl;
 
-    d.lattice = (Triple*) cudaAllocate(sizeof(Triple) * num_cells);
-    copyToDevice(d.lattice, linLattice, num_cells * sizeof(Triple));
+    d_array<double> dev_uniform(totalUniform, d.uniform_doubles);
+    d_array<double> dev_normal(totalNormal, d.normal_doubles);
+    p_array<int> dev_time(1, &initTime, d.time);
+
+    p_array<Triple> dev_lattice(num_cells, linLattice, d.lattice); 
     cpyLookupDevice(lattice.lookupTable, d);
+    p_array<double> dev_magnetizations(num_blocks * (t / pfreq), nullptr, d.magnetizations);
 
-    // Allocate the target array
-    HANDLE_ERROR(cudaMalloc((void **) &(d.magnetizations),
-        num_blocks * (t / pfreq) * sizeof(double)));
-
-    // Initialize performance timer
+    // Initializes performance timer
     Timer timer;
 
-    // Perform all memory copies here
-    HANDLE_ERROR(cudaMemcpy(d.waters, waters,
-        sizeof(water_info) * num_water,
-        cudaMemcpyHostToDevice));
-    HANDLE_ERROR(cudaMemcpy(d.time, &initTime,
-        sizeof(int),
-        cudaMemcpyHostToDevice));
-
-    int flags[num_water];
-    double *magnetizations = new double[num_blocks * (t / pfreq)]; // Local magnetization target
+    // Initialization memory copies to GPU performed here 
+    dev_waters.deviceUpload();
+    dev_time.deviceUpload();
 
     cout << "Kernel prepped!" << endl;
 
     // Run the kernel in sprints due to memory limits and timeout issues
-
     double time = 0;
     for(int i = 0; i < (t / sprintSteps); i++) {
         cout << "Starting sprint " << (i+1) << "." << endl;
@@ -569,26 +548,22 @@ void simulateWaters(std::string filename) {
             << elapsedTime << " ms" << endl;
 
         // Copy back the array of flags to catch any errors
-        HANDLE_ERROR(cudaMemcpy(flags, d.flags,
-            sizeof(int) * num_water,
-            cudaMemcpyDeviceToHost));
+        dev_flags.deviceDownload(); 
 
         bool success = true;
         for(int i = 0; i < num_water; i++) {
-            if(flags[i] != sprintSteps)
+            if(dev_flags[i] != sprintSteps)
                 success = false;
         }
         cout << "Success State: " << success << endl << "===========" << endl;
 
         // Copy back the array of magnetizations
-        HANDLE_ERROR(cudaMemcpy(magnetizations, d.magnetizations,
-            num_blocks * (t / pfreq) * sizeof(double),
-            cudaMemcpyDeviceToHost));
+        dev_magnetizations.deviceDownload(); 
 
         for(int j = 0; j < sprintSteps / pfreq; j++) {
             double magSum = 0;
             for(int k = 0; k < num_blocks; k++) {
-                magSum += magnetizations[j * num_blocks + k];
+                magSum += dev_magnetizations[j * num_blocks + k];
             }
             time += pInt;
             fout << time << "," << magSum << endl;
@@ -600,7 +575,6 @@ void simulateWaters(std::string filename) {
 
     delete[] linLattice;
     delete[] waters;
-    delete[] magnetizations;
     delete mnps;
     fout.close();
 }

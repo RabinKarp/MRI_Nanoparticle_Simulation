@@ -70,7 +70,7 @@ const double P_expr = 0.01;            // permeability in micron per ms
 
 /* Time scales and step sizes */
 const double tau = 1e-6;                // time step in ms
-const int totaltime = 40;               // total time to run for in ms - because of GPU architecture, this
+const int totaltime = 1;               // total time to run for in ms - because of GPU architecture, this
                                         // is constrained to be a discrete integer
 
 const int t = (int)(totaltime/tau);     // Total time steps
