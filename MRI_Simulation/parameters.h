@@ -12,6 +12,10 @@
 
 #include <cmath>
 
+#define HIGH        5000000
+#define MAX_MNPS    1000
+#define M_PI        3.14159265358979323846
+
 /* Parameters affecting nanoparticle residency in nodes */
 #undef FULL_BOUNDARIES      // use full boundary conditions to calculate field?
 const double raw_scale = 7; // calculate B explicitly within scale*R of cluster
@@ -72,7 +76,6 @@ const double P_expr = 0.01;            // permeability in micron per ms
 const double tau = 1e-6;                // time step in ms
 const int totaltime = 1;               // total time to run for in ms - because of GPU architecture, this
                                         // is constrained to be a discrete integer
-
 const int t = (int)(totaltime/tau);     // Total time steps
 const double taucp = 5.5;               // Carr-Purcell time in ms
 const int tcp = (int)(taucp/tau);       // time steps per Carr-Purcell time

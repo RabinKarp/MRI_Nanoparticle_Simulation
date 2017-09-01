@@ -26,6 +26,10 @@
 # POD Files #
 *.sub.*
 
+# Anything in the run archive folder #
+######################################
+*/Run_Archive/*
+
 # OS generated files #
 ######################
 .DS_Store

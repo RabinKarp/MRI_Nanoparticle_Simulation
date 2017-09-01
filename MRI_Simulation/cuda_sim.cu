@@ -1,8 +1,5 @@
-#define HIGH           5000000
-#define MAX_MNPS       1000
-#define M_PI           3.14159265358979323846
-
 #include "utilities/utilities.h"
+#include "parameters.h"
 #include "cuda_sim.h"
 
 #include <stdio.h>
@@ -15,7 +12,7 @@
 #include <thread>
 #include <iostream>
 #include "math.h"
-#include "parameters.h"
+
 #include "fcc_diffusion.h"
 #include "gpu_random.h"
 #include "octree.h"
@@ -25,6 +22,7 @@ using namespace std;
 struct t_rands {
     double *uniform;
     double *norm;
+    double *coin;
 };
 
 const int num_blocks = (num_water + threads_per_block - 1) / threads_per_block;
@@ -33,7 +31,8 @@ const double g = 42.5781e6;             // gyromagnetic ratio in MHz/T
 const double pInt = 1e-3;
 const int pfreq = (int)(pInt/tau);      // print net magnetization every 1us
 
-#define num_uniform_doubles 4 // # of uniform doubles per water per tstep
+#define num_uniform_doubles 3 // # of uniform doubles per tstep used to generate random direction 
+#define num_coins 1           // # of uniforn doubles used for coin flips
 #define num_normal_doubles 2  // # of normal  doubles per water per tstep
 
 //==============================================================================
@@ -106,17 +105,14 @@ __device__ gpu_node* find_node(gpu_node *n, double wx, double wy, double wz, int
     return find_node(n + n->child[child_no].idx, wx, wy, wz, d + 1, data);
 }
 
-__device__ gpu_node* get_voxel(water_info *w, GPUData &d) {
-    double wx = w->x, wy = w->y, wz = w->z;
+__device__ gpu_node* get_voxel(double &wx, double &wy, double &wz, GPUData &d) {
     return find_node(*(find_tree(wx, wy, wz, d)), wx, wy, wz, d.min_depth, d);
 }
 
 /**
  * Returns the B field at the location of a particular water molecule
  */
-__device__ double get_field(water_info *w, gpu_node* leaf, GPUData &d) {
-    double wx = w->x, wy = w->y, wz = w->z;
-
+__device__ double get_field(double &wx, double &wy, double &wz, gpu_node* leaf, GPUData &d) {
     uint64_t depth = 0, mc = (leaf->mc << 1) >> 1;
     while (mc >>= 3) depth++;
 
@@ -260,13 +256,12 @@ void setParameters(GPUData &d) {
     d.hashDim = hashDim;
     d.phase_stdev = phase_stdev;
 }
-
 //==============================================================================
 // Simulation functions
 //==============================================================================
 
 __device__ void updateNearest(water_info *w, GPUData &d) {
-    double cubeLength = d.bound / d.hashDim;
+    double cubeLength = d.bound / hashDim;
     int x_idx = w->x / cubeLength;
     int y_idx = w->y / cubeLength;
     int z_idx = w->z / cubeLength;
@@ -295,7 +290,7 @@ __device__ void updateNearest(water_info *w, GPUData &d) {
     w->nearest = cIndex;
 }
 
-__device__ bool cell_reflect(water_info *i, water_info *f, t_rands *r_nums, GPUData &d) { 
+inline __device__ bool cell_reflect(water_info *i, water_info *f, t_rands *r_nums, GPUData &d) { 
     double coin = *(r_nums->uniform + 4); 
     bool flip = (i->in_cell && (! f->in_cell) && coin < d.reflectIO)
                     || ((! i->in_cell) && f->in_cell && coin < d.reflectOI);
@@ -318,7 +313,7 @@ __device__ bool mnp_reflect(water_info *w, MNP_info *mnp, int num_mnps, GPUData 
     return retValue;
 }
 
-__device__ water_info rand_displacement(water_info *w, t_rands *r_nums, GPUData &d) {
+inline __device__ water_info rand_displacement(water_info *w, t_rands *r_nums, GPUData &d) {
     water_info disp;
     double norm = *(r_nums->norm);
 
@@ -348,58 +343,38 @@ __device__ void boundary_conditions(water_info *w, GPUData &d) {
     w->z = fmod(w->z + d.bound, d.bound);
 }
 
-__device__ void accumulatePhase(water_info *w, gpu_node* voxel, t_rands *r_nums, GPUData &d) {
-    double B = get_field(w, voxel, d);
-    double nD = * (r_nums->norm + 1);
+__device__ double accumulatePhase(double &wx, double &wy, double &wz,
+        gpu_node* voxel, double nD, bool in_cell, GPUData &d) { 
+    double B = get_field(wx, wy, wz, voxel, d);
+    double phase = 0;
 
     // If inside a cell, add a random phase kick.
-    w->phase += (w->in_cell) * nD * d.phase_stdev;
-    w->phase += B * 2 * M_PI * d.g * d.tau * 1e-3;
+    phase += (in_cell) * nD * d.phase_stdev; 
+    phase += B * 2 * M_PI * d.g * d.tau * 1e-3;
+
+    return phase;
 }
 // END PHASE ACCUMULATION FUNCTIONS
 
-__device__ void sumMagnetizations(double* input, int timepoint, GPUData &d) {
-    int tid = threadIdx.x + blockIdx.x * blockDim.x;
-    int cacheIndex = threadIdx.x;
-    int i = blockDim.x/2;
-    __syncthreads();
-    while(i != 0) {
-        if( (cacheIndex < i) && ((tid + i) < d.num_waters) ) {
-            input[cacheIndex] += input[cacheIndex + i];
-        }
-        __syncthreads();
-        i /= 2;
-    }
-    if(cacheIndex == 0) {
-        d.magnetizations[timepoint * d.nBlocks + blockIdx.x] = input[0];
-    }
-}
 
 __global__ void simulateWaters(GPUData d)  {
-    __shared__ double mags[threads_per_block];
-
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
-    int startTime = *d.time;
     water_info w;
-    gpu_node *voxel;
 
-    int x = 0;
-
-    if(tid < d.num_waters) {
-        // Copy water to chip memory
+    if(tid < num_water) {
+        // Copy water to local register 
         w = d.waters[tid];
-        d.flags[tid] = -1;
         updateNearest(&w, d);
     }
 
     struct t_rands r_nums;
     r_nums.uniform = d.uniform_doubles + tid * num_uniform_doubles;
     r_nums.norm = d.normal_doubles + tid * num_normal_doubles;
+    r_nums.coin = d.coins + tid * num_coins;
 
     for(int i = 0; i < d.timesteps; i++) {
 
-        if(tid < d.num_waters) {
-            x++;
+        if(tid < num_water) {
             water_info init = w;
 
             water_info disp = rand_displacement(&w, &r_nums, d);
@@ -408,7 +383,7 @@ __global__ void simulateWaters(GPUData d)  {
             w.z += disp.z;
             boundary_conditions(&w, d);
             updateNearest(&w, d);
-            voxel = get_voxel(&w, d);
+
 
             // Check cell boundary / MNP reflection
 
@@ -416,48 +391,55 @@ __global__ void simulateWaters(GPUData d)  {
                 w = init;
             }
 
-            accumulatePhase(&w, voxel, &r_nums, d);
+            // Store the position of the water molecule in global memory.
+            r_nums.uniform[0] = w.x;
+            r_nums.uniform[1] = w.y;
+            r_nums.uniform[2] = w.z; 
 
-            if(((startTime + i) % (2 * d.tcp)) == d.tcp) {
-                w.phase *= -1;
-            }
-
-            // If we need to do a reduction, copy to shared memory
-            if((startTime + i) % d.pfreq == 0)
-                mags[threadIdx.x] = cos(w.phase);
+            r_nums.uniform += num_water * num_uniform_doubles;
+            r_nums.norm += num_water * num_normal_doubles;
+            r_nums.coin += num_water * num_coins;
         }
-        // Perform a memory reduction
-
-        if((startTime + i) % d.pfreq == 0) {
-            sumMagnetizations(mags, i / d.pfreq, d);
-        }
-        r_nums.uniform += d.num_waters * num_uniform_doubles;
-        r_nums.norm += d.num_waters * num_normal_doubles;
     }
 
+    // Update the running time counter
     __syncthreads();
     if(tid == 0) {
         *d.time += d.timesteps;
     }
 
     // Copy the water molecule back to global memory
-    if(tid < d.num_waters) {
-        d.flags[tid] = x;
+    if(tid < num_water) {
         d.waters[tid] = w;
     }
 }
 
-void cpyLookupDevice(int **sourceTable, GPUData &d) {
-    d.localLookup = new int*[hashDim * hashDim * hashDim];
+__global__ void computePhaseAccumulation(double* __restrict__ locs, double* __restrict__ target, GPUData d) {
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
 
-    for(int i = 0; i < hashDim * hashDim * hashDim; i++) {
+    locs += 3 * tid;
+    double x = locs[0];
+    double y = locs[1];
+    double z = locs[2];
+    
+    gpu_node* voxel = get_voxel(x, y, z, d);
+
+    // TODO: Actually replace with a random double and phase kick
+    target[tid] = accumulatePhase(x, y, z, voxel, 5.0, false, d); 
+}
+
+void cpyLookupDevice(int **sourceTable, GPUData &d) {
+    int h3 = hashDim * hashDim * hashDim;
+    d.localLookup = new int*[h3];
+
+    for(int i = 0; i < h3; i++) {
         d.localLookup[i] = (int *) cudaAllocate(maxNeighbors * sizeof(int));
         copyToDevice((void *) d.localLookup[i], (void *) sourceTable[i],
             maxNeighbors * sizeof(int));
     }
-    d.lookupTable = (int**) cudaAllocate(hashDim * hashDim * hashDim * sizeof(int**));
+    d.lookupTable = (int**) cudaAllocate(h3 * sizeof(int**));
     copyToDevice((void *) d.lookupTable, d.localLookup,
-        hashDim * hashDim * hashDim * sizeof(int*));
+        h3 * sizeof(int*));
 }
 
 void destroyLookupDevice(GPUData &d) {
@@ -506,15 +488,14 @@ void simulateWaters(std::string filename) {
     // Compute number of uniform and random doubles needed for each sprint
     int totalUniform =  num_uniform_doubles * num_water * sprintSteps;
     int totalNormal = num_normal_doubles * num_water * sprintSteps;
+    int totalCoins = num_coins * num_water * sprintSteps;
     int initTime = 0;
  
     // GPU memory allocations performed here
-    p_array<water_info> dev_waters(num_water, waters, d.waters); 
-    p_array<int> dev_flags(num_water, nullptr, d.flags);
-
-    cout << "About to allocate waters and flags." << endl;
+    p_array<water_info> dev_waters(num_water, waters, d.waters);
 
     d_array<double> dev_uniform(totalUniform, d.uniform_doubles);
+    d_array<double> dev_coins(totalCoins, d.coins);
     d_array<double> dev_normal(totalNormal, d.normal_doubles);
     p_array<int> dev_time(1, &initTime, d.time);
 
@@ -525,7 +506,8 @@ void simulateWaters(std::string filename) {
     // Initializes performance timer
     Timer timer;
 
-    // Initialization memory copies to GPU performed here 
+    // Initialization memory copies to GPU performed here
+    dev_lattice.deviceUpload(); 
     dev_waters.deviceUpload();
     dev_time.deviceUpload();
 
@@ -537,37 +519,17 @@ void simulateWaters(std::string filename) {
         cout << "Starting sprint " << (i+1) << "." << endl;
 
         timer.gpuStart();
-
         gpu_rand_gen.getUniformDoubles(totalUniform, d.uniform_doubles);
+        gpu_rand_gen.getUniformDoubles(totalCoins, d.coins);
         gpu_rand_gen.getNormalDoubles(totalNormal, d.normal_doubles);
+
         simulateWaters<<<num_blocks, threads_per_block>>>(d);
 
+        computePhaseAccumulation<<<40000, 64>>>(d.uniform_doubles, d.coins, d); 
         float elapsedTime = timer.gpuStopSync();
 
         cout << "Kernel execution complete! Elapsed time: "
             << elapsedTime << " ms" << endl;
-
-        // Copy back the array of flags to catch any errors
-        dev_flags.deviceDownload(); 
-
-        bool success = true;
-        for(int i = 0; i < num_water; i++) {
-            if(dev_flags[i] != sprintSteps)
-                success = false;
-        }
-        cout << "Success State: " << success << endl << "===========" << endl;
-
-        // Copy back the array of magnetizations
-        dev_magnetizations.deviceDownload(); 
-
-        for(int j = 0; j < sprintSteps / pfreq; j++) {
-            double magSum = 0;
-            for(int k = 0; k < num_blocks; k++) {
-                magSum += dev_magnetizations[j * num_blocks + k];
-            }
-            time += pInt;
-            fout << time << "," << magSum << endl;
-        }
     }
 
     destroyLookupDevice(d);

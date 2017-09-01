@@ -11,7 +11,7 @@
 using namespace std;
 
 typedef struct gpu_node {
-    uint64_t mc;        // Mocton code of node; leaf if leftmost bit is set
+    uint64_t mc;        // Morton code of node; leaf if leftmost bit is set
     B_idx child[8];     // child offsets (internal) or child B fields (leaves)
     int numResidents;
     MNP_info* resident;
@@ -68,6 +68,7 @@ typedef struct GPUData {
 
     // Related to the GPU's random number resources
     double* uniform_doubles;
+    double* coins;
     double* normal_doubles;
 
     /**
@@ -81,6 +82,7 @@ typedef struct GPUData {
      // Memory for debugging purposes only
      int *flags;
 } GPUData;
+
 
 void simulateWaters(string fName);
 
