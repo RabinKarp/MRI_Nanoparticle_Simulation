@@ -16,7 +16,7 @@ CXX=nvcc
 cuda_flags= -std=c++11 \
 	   -gencode arch=compute_35,code=compute_35 \
        	   -gencode arch=compute_35,code=sm_35 \
-   	   -ccbin=icpc -lcurand -lcublas -lcusolver --use_fast_math -restrict\
+   	   -ccbin=icpc -lcurand -lcublas -lcusolver -restrict\
            -Xcompiler "-pthread -O3 -mkl"
 
 all: module_loader

@@ -39,7 +39,10 @@ const int num_runs = 1;     // number of times to run T2 simulation
 #undef TIMED_OUTPUT         // print out a progress report every 1ms?
 
 /* Related to the CUDA kernel */
-#define threads_per_block 128 
+#define threads_per_block 128
+
+// This number MUST be a whole multiple of the printing frequency and must evenly divide
+// the total timesteps in the experiment
 const int sprintSteps = 25000; // Each kernel execution handles AT MOST this many timesteps
 
 
@@ -62,7 +65,6 @@ const double bound = 40;                // full box is [0, bound]^3 (microns)
    simulation box. Given in microns. */
 const double water_start_bound = 10;
 
-
 /* Parameters related to the streamlined nearest cell finder */
 const int hashDim = 20;
 const int maxNeighbors = 13;
@@ -74,7 +76,7 @@ const double P_expr = 0.01;            // permeability in micron per ms
 
 /* Time scales and step sizes */
 const double tau = 1e-6;                // time step in ms
-const int totaltime = 1;               // total time to run for in ms - because of GPU architecture, this
+const int totaltime = 40;               // total time to run for in ms - because of GPU architecture, this
                                         // is constrained to be a discrete integer
 const int t = (int)(totaltime/tau);     // Total time steps
 const double taucp = 5.5;               // Carr-Purcell time in ms

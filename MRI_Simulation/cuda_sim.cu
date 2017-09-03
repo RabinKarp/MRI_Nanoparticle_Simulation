@@ -1,6 +1,7 @@
 #include "utilities/utilities.h"
-#include "parameters.h"
 #include "cuda_sim.h"
+#include <thrust/device_ptr.h>
+#include <thrust/reduce.h>
 
 #include <stdio.h>
 #include <time.h>
@@ -13,9 +14,11 @@
 #include <iostream>
 #include "math.h"
 
+#include "parameters.h"
 #include "fcc_diffusion.h"
 #include "gpu_random.h"
 #include "octree.h"
+
 
 using namespace std;
 
@@ -30,6 +33,10 @@ const int num_blocks = (num_water + threads_per_block - 1) / threads_per_block;
 const double g = 42.5781e6;             // gyromagnetic ratio in MHz/T
 const double pInt = 1e-3;
 const int pfreq = (int)(pInt/tau);      // print net magnetization every 1us
+
+// Constant for lin. alg. operations
+const double alpha = 1;
+const double beta = 0;
 
 #define num_uniform_doubles 3 // # of uniform doubles per tstep used to generate random direction 
 #define num_coins 1           // # of uniforn doubles used for coin flips
@@ -291,7 +298,7 @@ __device__ void updateNearest(water_info *w, GPUData &d) {
 }
 
 inline __device__ bool cell_reflect(water_info *i, water_info *f, t_rands *r_nums, GPUData &d) { 
-    double coin = *(r_nums->uniform + 4); 
+    double coin = *(r_nums->coin); 
     bool flip = (i->in_cell && (! f->in_cell) && coin < d.reflectIO)
                     || ((! i->in_cell) && f->in_cell && coin < d.reflectOI);
     return flip;
@@ -408,24 +415,53 @@ __global__ void simulateWaters(GPUData d)  {
         *d.time += d.timesteps;
     }
 
-    // Copy the water molecule back to global memory
+    // Copy the register water molecule back to global memory
     if(tid < num_water) {
         d.waters[tid] = w;
     }
 }
 
-__global__ void computePhaseAccumulation(double* __restrict__ locs, double* __restrict__ target, GPUData d) {
+__global__ void computePhaseAccumulation(double* __restrict__ locs, double* __restrict__ target,
+        int length, GPUData d) {
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    int stride = blockDim.x * gridDim.x;
+    locs += 3 * tid;
+    target += tid;
+
+    for(int i = blockIdx.x * blockDim.x + threadIdx.x; i < length; i += stride) { 
+        double x = locs[0];
+        double y = locs[1];
+        double z = locs[2];
+    
+        gpu_node* voxel = get_voxel(x, y, z, d);
+
+        // TODO: Actually replace with a random double and phase kick
+        *target = accumulatePhase(x, y, z, voxel, 5.0, false, d);
+        
+        locs += 3 * stride;
+        target += stride;
+    }
+}
+
+__global__ void performUpdate(water_info* __restrict__ waters, 
+        double* __restrict__ update, int len) { 
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
 
-    locs += 3 * tid;
-    double x = locs[0];
-    double y = locs[1];
-    double z = locs[2];
-    
-    gpu_node* voxel = get_voxel(x, y, z, d);
+    if(tid < len) {
+        // Store updated phase in register for reduction
+        double n_phase = waters[tid].phase + update[tid];
 
-    // TODO: Actually replace with a random double and phase kick
-    target[tid] = accumulatePhase(x, y, z, voxel, 5.0, false, d); 
+        // Overwrite the update with the cosine of the phase
+        update[tid] = cos(n_phase);  
+
+        // Copy new phase back to water
+        waters[tid].phase = n_phase;
+    }
+}
+
+__global__ void flipPhases(water_info* __restrict__ waters) {
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    waters[tid].phase *= -1; 
 }
 
 void cpyLookupDevice(int **sourceTable, GPUData &d) {
@@ -459,8 +495,9 @@ void simulateWaters(std::string filename) {
     std::random_device rd;
     XORShift<uint64_t> gen(time(NULL) + rd());
 
-    // Initialize GPU random number generator
+    // Initialize GPU random number generator and a linear algebra handler
     gpu_rng gpu_rand_gen;
+    Handler handle(0); // TODO: Fix this in the multi-GPU case!
 
     // The simulation has 3 distinct components: the lattice, the water
     // molecules, and the nanoparticles
@@ -498,6 +535,18 @@ void simulateWaters(std::string filename) {
     d_array<double> dev_coins(totalCoins, d.coins);
     d_array<double> dev_normal(totalNormal, d.normal_doubles);
     p_array<int> dev_time(1, &initTime, d.time);
+    p_array<double> update(num_water);
+
+    // Wrap the update in a thrust device pointer
+    thrust::device_ptr<double> td_ptr = thrust::device_pointer_cast(update.dp());
+
+    // Initialize an array containing only 1's, upload it to the GPU for use in matrix computation
+    p_array<double> ones(pfreq);
+
+    for(int i = 0; i < ones.getSize(); i++) {
+        ones[i] = 1;
+    } 
+    ones.deviceUpload();
 
     p_array<Triple> dev_lattice(num_cells, linLattice, d.lattice); 
     cpyLookupDevice(lattice.lookupTable, d);
@@ -511,26 +560,62 @@ void simulateWaters(std::string filename) {
     dev_waters.deviceUpload();
     dev_time.deviceUpload();
 
+    int num_phase_blocks = 40000; 
+
     cout << "Kernel prepped!" << endl;
+    cout << "Starting GPU computation..." << endl;
+    timer.cpuStart();
 
     // Run the kernel in sprints due to memory limits and timeout issues
-    double time = 0;
+    int time = 0;
     for(int i = 0; i < (t / sprintSteps); i++) {
-        cout << "Starting sprint " << (i+1) << "." << endl;
-
-        timer.gpuStart();
         gpu_rand_gen.getUniformDoubles(totalUniform, d.uniform_doubles);
         gpu_rand_gen.getUniformDoubles(totalCoins, d.coins);
         gpu_rand_gen.getNormalDoubles(totalNormal, d.normal_doubles);
 
+        // Generate a list of positions for water molecules without computing the field
         simulateWaters<<<num_blocks, threads_per_block>>>(d);
 
-        computePhaseAccumulation<<<40000, 64>>>(d.uniform_doubles, d.coins, d); 
-        float elapsedTime = timer.gpuStopSync();
+        // Compute the phase kick acquired by each water molecule at each location 
+        computePhaseAccumulation<<<num_phase_blocks, threads_per_block>>>
+            (d.uniform_doubles, d.coins, sprintSteps * num_water, d);
 
-        cout << "Kernel execution complete! Elapsed time: "
-            << elapsedTime << " ms" << endl;
+        // Use a matrix vector operation to add up the phase kicks
+        // We will use the array of uniform doubles as a temporary buffer to store phase kicks
+        // After each summation, we use another kernel to update the water molecules' phases and
+        // perform a memory reduction
+        for(int j = 0; j < sprintSteps; j += pfreq) {
+            cublasDgemv(
+                handle.cublasH, 
+                CUBLAS_OP_N,
+                num_water, pfreq,
+                &alpha,
+                d.coins + j * num_water, num_water,
+                ones.dp(), 1,
+                &beta,
+                update.dp(), 1 
+                );
+
+            performUpdate<<<num_blocks, threads_per_block>>>(d.waters, update.dp(), num_water);
+
+            // Get the magnetization sum via thrust reduction 
+            double target = thrust::reduce(td_ptr, td_ptr + num_water);
+
+            time += pfreq;
+
+            if(time % tcp == 0) {
+                flipPhases<<<num_blocks, threads_per_block>>>(d.waters);
+            } 
+
+            fout << ((double) time / 1000) << " " << target << endl;  
+        }
     }
+
+    float elapsedTime = timer.cpuStop();
+
+    cout << "Kernel execution complete! Elapsed time: "
+        << elapsedTime << " ms" << endl;
+
 
     destroyLookupDevice(d);
     finalizeGPU(d);
