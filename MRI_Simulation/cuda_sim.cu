@@ -607,7 +607,7 @@ void simulateWaters(std::string filename) {
                 flipPhases<<<num_blocks, threads_per_block>>>(d.waters);
             } 
 
-            fout << ((double) time / 1000) << " " << target << endl;  
+            fout << ((double) time * tau) << delim << target << endl;  
         }
     }
 

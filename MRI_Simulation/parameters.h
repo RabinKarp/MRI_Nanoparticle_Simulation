@@ -11,6 +11,7 @@
 #define PARAMETERS_H
 
 #include <cmath>
+#include <string>
 
 #define HIGH        5000000
 #define MAX_MNPS    1000
@@ -81,5 +82,7 @@ const int totaltime = 40;               // total time to run for in ms - because
 const int t = (int)(totaltime/tau);     // Total time steps
 const double taucp = 5.5;               // Carr-Purcell time in ms
 const int tcp = (int)(taucp/tau);       // time steps per Carr-Purcell time
+
+const std::string delim = ",";              // Delimiter for output CSV file
 
 #endif /* PARAMETERS_H */
