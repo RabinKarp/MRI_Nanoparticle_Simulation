@@ -33,11 +33,9 @@ const int num_runs = 1;     // number of times to run T2 simulation
 
 /* Switches for enabling or disabling debugging output files */
 #undef DEBUG_LATTICE        // create output file w/ cell centers and neighbors?
-#undef DEBUG_DIFF          // create output file w/ RMS displacements?
 #undef DEBUG_MNPS           // create output file w/ all MNP coordinates?
 #undef DEBUG_TREE           // check water/node residency via assertions?
 #undef DEBUG_FIELD          // create output file w/ B_z at all leaf nodes?
-#undef TIMED_OUTPUT         // print out a progress report every 1ms?
 
 /* Related to the CUDA kernel */
 #define threads_per_block 128
@@ -77,7 +75,7 @@ const double P_expr = 0.01;            // permeability in micron per ms
 
 /* Time scales and step sizes */
 const double tau = 1e-6;                // time step in ms
-const int totaltime = 40;               // total time to run for in ms - because of GPU architecture, this
+const int totaltime = 1;               // total time to run for in ms - because of GPU architecture, this
                                         // is constrained to be a discrete integer
 const int t = (int)(totaltime/tau);     // Total time steps
 const double taucp = 5.5;               // Carr-Purcell time in ms

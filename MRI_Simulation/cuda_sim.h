@@ -71,6 +71,8 @@ typedef struct GPUData {
     double* coins;
     double* normal_doubles;
 
+    bool* in_cell;
+
     /**
      * The array of magnetizations is a double array of dimension
      * (t * num_blocks). Each block writes to a unique portion of the shared

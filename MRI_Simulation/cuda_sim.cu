@@ -376,7 +376,7 @@ __global__ void simulateWaters(GPUData d)  {
 
     struct t_rands r_nums;
     r_nums.uniform = d.uniform_doubles + tid * num_uniform_doubles;
-    r_nums.norm = d.normal_doubles + tid * num_normal_doubles;
+    r_nums.norm = d.normal_doubles + tid;
     r_nums.coin = d.coins + tid * num_coins;
 
     for(int i = 0; i < d.timesteps; i++) {
@@ -402,9 +402,10 @@ __global__ void simulateWaters(GPUData d)  {
             r_nums.uniform[0] = w.x;
             r_nums.uniform[1] = w.y;
             r_nums.uniform[2] = w.z; 
+            d.in_cell[i * tid] = w.in_cell;
 
             r_nums.uniform += num_water * num_uniform_doubles;
-            r_nums.norm += num_water * num_normal_doubles;
+            r_nums.norm += num_water;
             r_nums.coin += num_water * num_coins;
         }
     }
@@ -421,12 +422,18 @@ __global__ void simulateWaters(GPUData d)  {
     }
 }
 
-__global__ void computePhaseAccumulation(double* __restrict__ locs, double* __restrict__ target,
-        int length, GPUData d) {
+__global__ void computePhaseAccumulation(double* __restrict__ locs, 
+        double* __restrict__ target,
+        bool* __restrict__ in_cell,
+        double* __restrict__ rand_doubles,
+        int length, 
+        GPUData d) {
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
     int stride = blockDim.x * gridDim.x;
     locs += 3 * tid;
     target += tid;
+    in_cell += tid;
+    rand_doubles += tid;
 
     for(int i = blockIdx.x * blockDim.x + threadIdx.x; i < length; i += stride) { 
         double x = locs[0];
@@ -436,10 +443,11 @@ __global__ void computePhaseAccumulation(double* __restrict__ locs, double* __re
         gpu_node* voxel = get_voxel(x, y, z, d);
 
         // TODO: Actually replace with a random double and phase kick
-        *target = accumulatePhase(x, y, z, voxel, 5.0, false, d);
+        *target = accumulatePhase(x, y, z, voxel, *rand_doubles, *in_cell, d);
         
         locs += 3 * stride;
         target += stride;
+        in_cell += stride;
     }
 }
 
@@ -536,6 +544,7 @@ void simulateWaters(std::string filename) {
     d_array<double> dev_normal(totalNormal, d.normal_doubles);
     p_array<int> dev_time(1, &initTime, d.time);
     p_array<double> update(num_water);
+    d_array<bool> d_in_cell(num_water, d.in_cell);
 
     // Wrap the update in a thrust device pointer
     thrust::device_ptr<double> td_ptr = thrust::device_pointer_cast(update.dp());
@@ -578,7 +587,12 @@ void simulateWaters(std::string filename) {
 
         // Compute the phase kick acquired by each water molecule at each location 
         computePhaseAccumulation<<<num_phase_blocks, threads_per_block>>>
-            (d.uniform_doubles, d.coins, sprintSteps * num_water, d);
+            (d.uniform_doubles, 
+             d.coins, 
+             d.in_cell, 
+             d.normal_doubles + sprintSteps * num_water, 
+             sprintSteps * num_water, 
+             d);
 
         // Use a matrix vector operation to add up the phase kicks
         // We will use the array of uniform doubles as a temporary buffer to store phase kicks
