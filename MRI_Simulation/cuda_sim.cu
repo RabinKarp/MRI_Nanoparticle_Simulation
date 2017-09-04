@@ -356,7 +356,7 @@ __device__ double accumulatePhase(double &wx, double &wy, double &wz,
     double phase = 0;
 
     // If inside a cell, add a random phase kick.
-    phase += (in_cell) * nD * d.phase_stdev; 
+    phase += (in_cell) * nD * d.phase_stdev;  
     phase += B * 2 * M_PI * d.g * d.tau * 1e-3;
 
     return phase;
@@ -373,6 +373,8 @@ __global__ void simulateWaters(GPUData d)  {
         w = d.waters[tid];
         updateNearest(&w, d);
     }
+
+    bool* inc_ptr = d.in_cell + tid;
 
     struct t_rands r_nums;
     r_nums.uniform = d.uniform_doubles + tid * num_uniform_doubles;
@@ -402,8 +404,9 @@ __global__ void simulateWaters(GPUData d)  {
             r_nums.uniform[0] = w.x;
             r_nums.uniform[1] = w.y;
             r_nums.uniform[2] = w.z; 
-            d.in_cell[i * tid] = w.in_cell;
+            *inc_ptr = w.in_cell;
 
+            inc_ptr += num_water;
             r_nums.uniform += num_water * num_uniform_doubles;
             r_nums.norm += num_water;
             r_nums.coin += num_water * num_coins;
@@ -442,7 +445,6 @@ __global__ void computePhaseAccumulation(double* __restrict__ locs,
     
         gpu_node* voxel = get_voxel(x, y, z, d);
 
-        // TODO: Actually replace with a random double and phase kick
         *target = accumulatePhase(x, y, z, voxel, *rand_doubles, *in_cell, d);
         
         locs += 3 * stride;
@@ -544,7 +546,7 @@ void simulateWaters(std::string filename) {
     d_array<double> dev_normal(totalNormal, d.normal_doubles);
     p_array<int> dev_time(1, &initTime, d.time);
     p_array<double> update(num_water);
-    d_array<bool> d_in_cell(num_water, d.in_cell);
+    d_array<bool> d_in_cell(num_water * sprintSteps, d.in_cell);
 
     // Wrap the update in a thrust device pointer
     thrust::device_ptr<double> td_ptr = thrust::device_pointer_cast(update.dp());

@@ -42,7 +42,7 @@ const int num_runs = 1;     // number of times to run T2 simulation
 
 // This number MUST be a whole multiple of the printing frequency and must evenly divide
 // the total timesteps in the experiment
-const int sprintSteps = 25000; // Each kernel execution handles AT MOST this many timesteps
+const int sprintSteps = 20000; // Each kernel execution handles AT MOST this many timesteps
 
 
 /* Molecule and nanoparticle info */
@@ -75,12 +75,12 @@ const double P_expr = 0.01;            // permeability in micron per ms
 
 /* Time scales and step sizes */
 const double tau = 1e-6;                // time step in ms
-const int totaltime = 1;               // total time to run for in ms - because of GPU architecture, this
+const int totaltime = 40;               // total time to run for in ms - because of GPU architecture, this
                                         // is constrained to be a discrete integer
 const int t = (int)(totaltime/tau);     // Total time steps
 const double taucp = 5.5;               // Carr-Purcell time in ms
 const int tcp = (int)(taucp/tau);       // time steps per Carr-Purcell time
 
-const std::string delim = ",";              // Delimiter for output CSV file
+const std::string delim = ",";          // Delimiter for output CSV file
 
 #endif /* PARAMETERS_H */
