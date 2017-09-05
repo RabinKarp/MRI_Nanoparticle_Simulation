@@ -8,9 +8,9 @@ This version of the code is implemented such that intracellular water molecules 
 Two easy steps: make and submit the subfile - details below.
 
 ### To make on the Penguin on Demand server:
-Call `make` in the MRI_Simulation directory. You do NOT need to load in any dependant modules manually - this is taken care of when you call `make` by the modules.sh shell script. Consequently, if you wish to load in some new custom modules, modify this file.
+Call `make` in the `src` directory. You do NOT need to load in any dependant modules manually - this is taken care of when you call `make` by the modules.sh shell script. Consequently, if you wish to load in some new custom modules, modify this file.
 
-It is recommended to run `make clean` first to ensure that all header files are properly updated. In addition, you can run `make clean_output` to delete all CSV files in the directory MRI_Simulation. Calling `make clean` does NOT perform this behavior.
+It is recommended to run `make clean` first to ensure that all header files are properly updated. In addition, you can run `make clean_output` to delete all CSV files in the directory `src`. Calling `make clean` does NOT perform this behavior.
 
 ### To run the simulation:
 A subfile is already configured, `GPU_Test.sub`. Simply call and run this simulation with the appropriate walltime defined. This simulation takes about 14 minutes for 4000 water molecules simulating 40 ms of diffusion - expect the runtime to double if either the simulation time or the number of water molecules is doubled.
