@@ -3,7 +3,7 @@
 #PBS -l nodes=1:ppn=8
 #PBS -l walltime=00:30:00
 
-cd GPUSimulation/MRI_Simulation
+cd GPUSimulation/src
 
 # Load in all requisite modules
 . modules.sh

@@ -22,7 +22,7 @@ cuda_flags= -std=c++11 \
 all: module_loader
 
 module_loader:
-	sh ~/GPUSimulation/MRI_Simulation/build.sh	
+	sh build.sh	
 
 gpu_sim: $(OBJS) $(PARAMS)
 	$(CXX) $(cuda_flags) -o $@.out $(OBJS) 
