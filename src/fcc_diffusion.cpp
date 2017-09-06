@@ -71,8 +71,8 @@ FCC::FCC(double D_in, double D_out, double P_expr, XORShift<> &gen)
 {
     norm_in = std::normal_distribution<>(0, sqrt(pi * D_in * tau));
     norm_out = std::normal_distribution<>(0, sqrt(pi * D_out * tau));
-    this->reflectIO = 1 - sqrt(tau / (6*D_in)) * 4 * P_expr;
-    this->reflectOI = 1 - ((1 - reflectIO) * sqrt(D_in/D_out));
+    this->reflectIO = reflectIO; 
+    this->reflectOI = reflectOI; 
     initializeCells(gen);
     initializeLookupTable();
 }
@@ -119,7 +119,7 @@ void FCC::initializeCells(XORShift<> &gen) {
 
 /*
  * Given a set of Cartesian boundary conditions, initialize a given number of
- * water molecules.
+ * water molecules within the smaller starting-water bounding box.
  */
 water_info *FCC::init_molecules(int n, XORShift<> &gen)
 {
@@ -130,15 +130,27 @@ water_info *FCC::init_molecules(int n, XORShift<> &gen)
 
     for (int i = 0; i < n; i++)
     {
-        double x = offset + gen.rand_pos_double() * water_start_bound;
-        double y = offset + gen.rand_pos_double() * water_start_bound;
-        double z = offset + gen.rand_pos_double() * water_start_bound;
+        double x, y, z;
+        bool invalid = true;
+
+        // Re-throw the water molecule repeatedly until we get a valid one
+        while(invalid) {
+            invalid = false; 
+            x = offset + gen.rand_pos_double() * water_start_bound;
+            y = offset + gen.rand_pos_double() * water_start_bound;
+            z = offset + gen.rand_pos_double() * water_start_bound;
+
+#ifdef AVOID_INTRACELLULAR_THROW
+            // When the appropriate flag is defined, re-throw if inside a cell
+            invalid = (checkLatticeContainment(x, y, z) >= 0);
+#endif
+        }
+
 
         temp->x = x;
         temp->y = y;
         temp->z = z;
-        temp->phase = 0;
-        this->update_nearest_cell_full(temp);
+        temp->phase = 0; 
         temp++;
     }
 

@@ -14,7 +14,7 @@
 #include <string>
 
 #define HIGH        5000000
-#define MAX_MNPS    1000
+#define MAX_MNPS    1000    // Upper bound to number of cells in the simulation (modify as needed)
 #define M_PI        3.14159265358979323846
 
 /* Parameters affecting nanoparticle residency in nodes */
@@ -27,9 +27,7 @@ const double border = 6;    // boundary from box where we start applying BC's
 #endif
 
 /* Parameters affecting the T2 simulation */
-#undef EXPLICIT             // calculate B field explicitly? *DEPRECATED
-const int num_threads = 16; // number of threads to run T2 simulation on
-const int num_runs = 1;     // number of times to run T2 simulation
+const int num_threads = 16; // number of CPU threads to run T2 simulation on
 
 /* Switches for enabling or disabling debugging output files */
 #undef DEBUG_LATTICE        // create output file w/ cell centers and neighbors?
@@ -40,8 +38,7 @@ const int num_runs = 1;     // number of times to run T2 simulation
 /* Related to the CUDA kernel */
 #define threads_per_block 192 // Keep this as a multiple of 64
 
-// This number MUST be a whole multiple of the printing frequency and must evenly divide
-// the total timesteps in the experiment
+// The variable below must be a multiple of the printing frequency
 const int sprintSteps = 20000; // Each kernel execution handles AT MOST this many timesteps
 
 
@@ -64,21 +61,39 @@ const double bound = 40;                // full box is [0, bound]^3 (microns)
    simulation box. Given in microns. */
 const double water_start_bound = 10;
 
-/* Parameters related to the streamlined nearest cell finder */
+/**
+ * Define the flag below to force the simulation to avoid throwing water
+ * molecules inside of cells initially. 
+ */
+#undef AVOID_INTRACELLULAR_THROW
+
+/* Parameters related to the optimized nearest cell finder */
 const int hashDim = 20;
 const int maxNeighbors = 13;
 
 /* Constants affecting diffusion */
 const double D_cell = .5547;            // D in micron^2 per ms
 const double D_extra = 1.6642;          // D in micron^2 per ms
-const double P_expr = 0.01;            // permeability in micron per ms
+const double P_expr = 0.01;             // permeability in micron per ms
+
+/**
+ * Each of the following doubles is in the range 0 to 1 and gives
+ * the probability that a given water molecule will bounce off the cell boundary
+ * attempting to diffuse from into the cell out of the cell (reflectIO) and the 
+ * probability that a molecule bounces will diffusing out of the cell into the cell (reflectOI).
+ * 
+ * To make cells impermeable, set both of these numbers to 1. To make cell boundaries nonexistant,
+ * set both numbers to 0.   
+ */
+const double reflectIO = 1 - sqrt(tau / (6*D_in)) * 4 * P_expr;
+const double reflectOI = 1 - ((1 - reflectIO) * sqrt(D_in/D_out));
 
 /* Time scales and step sizes */
-const double tau = 1e-6;                // time step in ms
+const double tau = 1e-6;                // time step in ms - currently must be power of 10
 const int totaltime = 40;               // total time to run for in ms - because of GPU architecture, this
                                         // is constrained to be a discrete integer
 const int t = (int)(totaltime/tau);     // Total time steps
-const double taucp = 5.5;               // Carr-Purcell time in ms
+const double taucp = 5.5;               // Carr-Purcell time in ms - up to 3 decimal places of precision 
 const int tcp = (int)(taucp/tau);       // time steps per Carr-Purcell time
 
 const std::string delim = ",";          // Delimiter for output CSV file

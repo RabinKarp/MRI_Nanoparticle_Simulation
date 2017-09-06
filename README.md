@@ -24,7 +24,10 @@ Modify the file `T2_GPU_sim.cu`. This file contains nothing else except a functi
 ### NOTE:
 This simulation can only be run on the queue H30G (that has K40 GPUs installed). In addition, at least 8 cores per node must be configured in order to use a single GPU - each node supports up to 16. 
 
-## Relevant parameters in this new simulation:
+## Relevant flags in the new simulation:
+**AVOID_INTRACELLULAR_THROW:** When this flag is defined, the simulation avoids initializing any water molecules inside cells. To keep water molecules from difffusing into cells after the simulation starts, modify the reflectIO and reflectOI parameters, which control how permeable the cell membrane is. 
+
+## Relevant parameters in the new simulation:
 
 **mmoment:** The magnetic moment for each cell’s dipole
 
