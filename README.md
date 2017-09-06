@@ -16,7 +16,7 @@ It is recommended to run `make clean` first to ensure that all header files are 
 A subfile is already configured, `GPU_Test.sub`. Simply call and run this simulation with the appropriate walltime defined. This simulation takes about 14 minutes for 4000 water molecules simulating 40 ms of diffusion - expect the runtime to double if either the simulation time or the number of water molecules is doubled.
 
 ### Where to find the outputs: 
-Check the folder `outputs` in the project root directory.
+Check the src folder - eventually, I will add a line in the code to send outputs to their own dedicated folder.
 
 ### How to modify the file-naming convention:
 Modify the file `T2_GPU_sim.cu`. This file contains nothing else except a function to set the output filename and the main method that initializes the water molecule simulation.

@@ -67,9 +67,9 @@ typedef struct GPUData {
     double phase_stdev;
 
     // Related to the GPU's random number resources
-    double* uniform_doubles;
-    double* coins;
-    double* normal_doubles;
+    double *x, *y, *z; 
+    double *coins;
+    double *normal_doubles;
 
     bool* in_cell;
 

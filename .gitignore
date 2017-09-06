@@ -30,6 +30,10 @@
 ######################################
 */Run_Archive/*
 
+# All vim swapfiles # 
+#####################
+*.swp
+
 # OS generated files #
 ######################
 .DS_Store

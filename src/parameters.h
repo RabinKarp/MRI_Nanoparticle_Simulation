@@ -38,15 +38,15 @@ const int num_runs = 1;     // number of times to run T2 simulation
 #undef DEBUG_FIELD          // create output file w/ B_z at all leaf nodes?
 
 /* Related to the CUDA kernel */
-#define threads_per_block 128
+#define threads_per_block 192 // Keep this as a multiple of 64
 
 // This number MUST be a whole multiple of the printing frequency and must evenly divide
 // the total timesteps in the experiment
 const int sprintSteps = 20000; // Each kernel execution handles AT MOST this many timesteps
 
 
-/* Molecule and nanoparticle info */
-const int num_water = 4000;             // number of waters in simulation
+/* Molecule information; simulation performs at its peak when num_water is divisible by 64 */
+const int num_water = 4032;             // number of waters in simulation
 
 /* Related to the cells in the simulation*/
 const int num_cells = 80;               // Number of randomly thrown cells

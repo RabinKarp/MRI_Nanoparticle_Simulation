@@ -23,9 +23,19 @@
 using namespace std;
 
 struct t_rands {
-    double *uniform;
-    double *norm;
+    double *x;
+    double *y;
+    double *z;
     double *coin;
+    double *norm;
+
+    __device__ void advancePointer(int stride) {
+        x += stride;
+        y += stride;
+        z += stride;
+        coin += stride;
+        norm += stride;
+    }
 };
 
 const int num_blocks = (num_water + threads_per_block - 1) / threads_per_block;
@@ -38,8 +48,7 @@ const int pfreq = (int)(pInt/tau);      // print net magnetization every 1us
 const double alpha = 1;
 const double beta = 0;
 
-#define num_uniform_doubles 3 // # of uniform doubles per tstep used to generate random direction 
-#define num_coins 1           // # of uniforn doubles used for coin flips
+#define num_uniform_doubles 4 // # of uniform doubles per tstep used to generate random direction 
 #define num_normal_doubles 2  // # of normal  doubles per water per tstep
 
 //==============================================================================
@@ -324,9 +333,9 @@ inline __device__ water_info rand_displacement(water_info *w, t_rands *r_nums, G
     water_info disp;
     double norm = *(r_nums->norm);
 
-    disp.x = *(r_nums->uniform + 0) * 2 - 1.0;
-    disp.y = *(r_nums->uniform + 1) * 2 - 1.0;
-    disp.z = *(r_nums->uniform + 2) * 2 - 1.0;
+    disp.x = *(r_nums->x) * 2 - 1.0;
+    disp.y = *(r_nums->y) * 2 - 1.0;
+    disp.z = *(r_nums->z) * 2 - 1.0;
 
     if(w->in_cell) {
         norm *= d.in_stdev;
@@ -372,18 +381,18 @@ __global__ void simulateWaters(GPUData d)  {
         // Copy water to local register 
         w = d.waters[tid];
         updateNearest(&w, d);
-    }
 
-    bool* inc_ptr = d.in_cell + tid;
+        bool* inc_ptr = d.in_cell + tid;
 
-    struct t_rands r_nums;
-    r_nums.uniform = d.uniform_doubles + tid * num_uniform_doubles;
-    r_nums.norm = d.normal_doubles + tid;
-    r_nums.coin = d.coins + tid * num_coins;
+        struct t_rands r_nums;
+        r_nums.x = d.x;
+        r_nums.y = d.y; 
+        r_nums.z = d.z; 
+        r_nums.norm = d.normal_doubles;
+        r_nums.coin = d.coins;
+        r_nums.advancePointer(tid);
 
-    for(int i = 0; i < d.timesteps; i++) {
-
-        if(tid < num_water) {
+        for(int i = 0; i < d.timesteps; i++) {
             water_info init = w;
 
             water_info disp = rand_displacement(&w, &r_nums, d);
@@ -393,7 +402,6 @@ __global__ void simulateWaters(GPUData d)  {
             boundary_conditions(&w, d);
             updateNearest(&w, d);
 
-
             // Check cell boundary / MNP reflection
 
             if(cell_reflect(&init, &w, &r_nums, d)) {
@@ -401,16 +409,15 @@ __global__ void simulateWaters(GPUData d)  {
             }
 
             // Store the position of the water molecule in global memory.
-            r_nums.uniform[0] = w.x;
-            r_nums.uniform[1] = w.y;
-            r_nums.uniform[2] = w.z; 
+            *(r_nums.x) = w.x;
+            *(r_nums.y) = w.y;
+            *(r_nums.z) = w.z; 
             *inc_ptr = w.in_cell;
 
             inc_ptr += num_water;
-            r_nums.uniform += num_water * num_uniform_doubles;
-            r_nums.norm += num_water;
-            r_nums.coin += num_water * num_coins;
+            r_nums.advancePointer(d.num_waters); 
         }
+        
     }
 
     // Update the running time counter
@@ -425,31 +432,36 @@ __global__ void simulateWaters(GPUData d)  {
     }
 }
 
-__global__ void computePhaseAccumulation(double* __restrict__ locs, 
+__global__ void computePhaseAccumulation(
         double* __restrict__ target,
         bool* __restrict__ in_cell,
-        double* __restrict__ rand_doubles,
+        double* __restrict__ normal_doubles,
         int length, 
         GPUData d) {
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
-    int stride = blockDim.x * gridDim.x;
-    locs += 3 * tid;
+    int stride = blockDim.x * gridDim.x; 
+
+    d.x += tid;
+    d.y += tid;
+    d.z += tid;
     target += tid;
     in_cell += tid;
-    rand_doubles += tid;
+    normal_doubles += tid;
 
     for(int i = blockIdx.x * blockDim.x + threadIdx.x; i < length; i += stride) { 
-        double x = locs[0];
-        double y = locs[1];
-        double z = locs[2];
+        double x = *(d.x);
+        double y = *(d.y); 
+        double z = *(d.z); 
     
         gpu_node* voxel = get_voxel(x, y, z, d);
-
-        *target = accumulatePhase(x, y, z, voxel, *rand_doubles, *in_cell, d);
-        
-        locs += 3 * stride;
+        *target = accumulatePhase(x, y, z, voxel, *normal_doubles, *in_cell, d);
+       
+        d.x += stride;
+        d.y += stride;
+        d.z += stride; 
         target += stride;
         in_cell += stride;
+        normal_doubles += stride;
     }
 }
 
@@ -535,17 +547,21 @@ void simulateWaters(std::string filename) {
     // Compute number of uniform and random doubles needed for each sprint
     int totalUniform =  num_uniform_doubles * num_water * sprintSteps;
     int totalNormal = num_normal_doubles * num_water * sprintSteps;
-    int totalCoins = num_coins * num_water * sprintSteps;
     int initTime = 0;
  
     // GPU memory allocations performed here
     p_array<water_info> dev_waters(num_water, waters, d.waters);
 
-    d_array<double> dev_uniform(totalUniform, d.uniform_doubles);
-    d_array<double> dev_coins(totalCoins, d.coins);
+    // Partition out the uniform random numbers
+    d_array<double> dev_uniform(totalUniform);
+    d.x = dev_uniform.dp();
+    d.y = dev_uniform.dp() + sprintSteps * num_water;
+    d.z = dev_uniform.dp() + 2 * sprintSteps * num_water;
+    d.coins = dev_uniform.dp() + 3 * sprintSteps * num_water;
+
     d_array<double> dev_normal(totalNormal, d.normal_doubles);
     p_array<int> dev_time(1, &initTime, d.time);
-    p_array<double> update(num_water);
+    d_array<double> update(num_water);
     d_array<bool> d_in_cell(num_water * sprintSteps, d.in_cell);
 
     // Wrap the update in a thrust device pointer
@@ -580,17 +596,15 @@ void simulateWaters(std::string filename) {
     // Run the kernel in sprints due to memory limits and timeout issues
     int time = 0;
     for(int i = 0; i < (t / sprintSteps); i++) {
-        gpu_rand_gen.getUniformDoubles(totalUniform, d.uniform_doubles);
-        gpu_rand_gen.getUniformDoubles(totalCoins, d.coins);
-        gpu_rand_gen.getNormalDoubles(totalNormal, d.normal_doubles);
+        gpu_rand_gen.getUniformDoubles(totalUniform, dev_uniform.dp());
+        gpu_rand_gen.getNormalDoubles(totalNormal, dev_normal.dp());
 
         // Generate a list of positions for water molecules without computing the field
         simulateWaters<<<num_blocks, threads_per_block>>>(d);
 
         // Compute the phase kick acquired by each water molecule at each location 
         computePhaseAccumulation<<<num_phase_blocks, threads_per_block>>>
-            (d.uniform_doubles, 
-             d.coins, 
+            (d.coins, 
              d.in_cell, 
              d.normal_doubles + sprintSteps * num_water, 
              sprintSteps * num_water, 
