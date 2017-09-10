@@ -49,7 +49,7 @@ const int num_water = 4032;             // number of waters in simulation
 const int num_cells = 154;               // Number of randomly thrown cells
 const double cell_r = .55;                // cell radius in microns
 
-const double mmoment = 8.1957e-18;         // Magnetic moment for each cell
+const double mmoment = 8.1957e-16;         // Magnetic moment for each cell
 const double phase_stdev = 1.0;         // St. dev. of intracellular
                                         // phase accumulation
 

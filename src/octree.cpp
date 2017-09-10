@@ -170,7 +170,7 @@ bool Octree::MNP_in_space(MNP_info *mnp, double x, double y, double z, double g)
     double dx = x + g/2 - mnp->x;
     double dy = y + g/2 - mnp->y;
     double dz = z + g/2 - mnp->z;
-    return NORMSQ(dx, dy, dz) < pow(g/2*sqrt(3) + cell_r, 2);
+    return NORMSQ(dx, dy, dz) < pow(g/2*sqrt(3) + scale * cell_r, 2);
 }
 
 /*
@@ -237,8 +237,8 @@ double Octree::grad(double x, double y, double z, double g)
         double M = np->M;
 
         // Don't add a gradient contribution from this cell if we are
-        // within the cell bound.
-        if (NORMSQ(dx, dy, dz) > pow(cell_r, 2)) {
+        // within a scale multiple of the cell radius 
+        if (NORMSQ(dx, dy, dz) > pow(scale * cell_r, 2)) {
             // Factor of 10^17 inserted by HD. See magnetic field calculation
             // comment for rationale
             double divisor = pow(NORMSQ(dx, dy, dz), 3.5);
