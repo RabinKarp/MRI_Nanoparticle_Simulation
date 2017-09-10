@@ -30,8 +30,8 @@ const double border = 6;    // boundary from box where we start applying BC's
 const int num_threads = 16; // number of CPU threads to run T2 simulation on
 
 /* Switches for enabling or disabling debugging output files */
-#undef DEBUG_LATTICE        // create output file w/ cell centers and neighbors?
-#undef DEBUG_MNPS           // create output file w/ all MNP coordinates?
+#define DEBUG_LATTICE        // create output file w/ cell centers and neighbors?
+#define DEBUG_MNPS           // create output file w/ all MNP coordinates?
 #undef DEBUG_TREE           // check water/node residency via assertions?
 #undef DEBUG_FIELD          // create output file w/ B_z at all leaf nodes?
 
@@ -46,10 +46,10 @@ const int sprintSteps = 20000; // Each kernel execution handles AT MOST this man
 const int num_water = 4032;             // number of waters in simulation
 
 /* Related to the cells in the simulation*/
-const int num_cells = 80;               // Number of randomly thrown cells
-const double cell_r = 2;                // cell radius in microns
+const int num_cells = 154;               // Number of randomly thrown cells
+const double cell_r = .55;                // cell radius in microns
 
-const double mmoment = 1.7e-15;         // Magnetic moment for each cell
+const double mmoment = 8.1957e-18;         // Magnetic moment for each cell
 const double phase_stdev = 1.0;         // St. dev. of intracellular
                                         // phase accumulation
 
@@ -65,7 +65,7 @@ const double water_start_bound = 10;
  * Define the flag below to force the simulation to avoid throwing water
  * molecules inside of cells initially. 
  */
-#undef AVOID_INTRACELLULAR_THROW
+#define AVOID_INTRACELLULAR_THROW
 
 /* Parameters related to the optimized nearest cell finder */
 const int hashDim = 20;
@@ -85,8 +85,8 @@ const double P_expr = 0.01;             // permeability in micron per ms
  * To make cells impermeable, set both of these numbers to 1. To make cell boundaries nonexistant,
  * set both numbers to 0.   
  */
-const double reflectIO = 1 - sqrt(tau / (6*D_in)) * 4 * P_expr;
-const double reflectOI = 1 - ((1 - reflectIO) * sqrt(D_in/D_out));
+const double reflectIO =1; // 1 - sqrt(tau / (6*D_in)) * 4 * P_expr;
+const double reflectOI =1; // 1 - ((1 - reflectIO) * sqrt(D_in/D_out));
 
 /* Time scales and step sizes */
 const double tau = 1e-6;                // time step in ms - currently must be power of 10

@@ -255,8 +255,8 @@ void setParameters(GPUData &d) {
     d.in_stdev = sqrt(pi * D_cell * tau);
     d.out_stdev = sqrt(pi * D_extra * tau);
 
-    d.reflectIO = 1 - sqrt(tau / (6*D_cell)) * 4 * P_expr;
-    d.reflectOI = 1 - ((1 - d.reflectIO) * sqrt(D_cell/D_extra));
+    d.reflectIO = reflectIO; 
+    d.reflectOI = reflectOI; 
     d.tcp = tcp;
 
     d.num_cells = num_cells;
