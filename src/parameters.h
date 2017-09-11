@@ -50,8 +50,16 @@ const int num_cells = 154;               // Number of randomly thrown cells
 const double cell_r = .55;                // cell radius in microns
 
 const double mmoment = 8.1957e-16;         // Magnetic moment for each cell
-const double phase_stdev = 1.0;         // St. dev. of intracellular
-                                        // phase accumulation
+
+// Exactly ONE of the two flags below must be set
+#define CONSTANT_KICK
+#undef RANDOM_KICK
+
+#ifdef CONSTANT_KICK 
+const double phase_k = 1.0;             // Intracellular ph. kick is k * dt at each tstep
+#elif defined RANDOM_KICK
+const double phase_stdev = 1.0;         // St. dev. of intracellular phase accumulation
+#endif
 
 /* Related to the simulation bounds */
 const double bound = 40;                // full box is [0, bound]^3 (microns)

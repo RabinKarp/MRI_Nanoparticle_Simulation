@@ -270,7 +270,13 @@ void setParameters(GPUData &d) {
     d.bound = bound;
     d.pfreq = pfreq;
     d.hashDim = hashDim;
+
+#ifdef RANDOM_KICK
     d.phase_stdev = phase_stdev;
+#elif defined CONSTANT_KICK
+    d.phase_k = phase_k;
+#endif 
+
 }
 //==============================================================================
 // Simulation functions
@@ -364,8 +370,13 @@ __device__ double accumulatePhase(double &wx, double &wy, double &wz,
     double B = get_field(wx, wy, wz, voxel, d);
     double phase = 0;
 
-    // If inside a cell, add a random phase kick.
-    phase += (in_cell) * nD * d.phase_stdev;  
+#ifdef RANDOM_KICK
+    // If inside a cell, add a random kick (when the flag is defined)
+    phase += (in_cell) * nD * d.phase_stdev;
+#elif defined CONSTANT_KICK
+    // If inside a cell, add a constant kick (when the flag is defined)
+    phase += (in_cell) * d.phase_k * d.tau;
+#endif 
     phase += B * 2 * M_PI * d.g * d.tau * 1e-3;
 
     return phase;

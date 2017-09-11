@@ -3,6 +3,7 @@
 
 #include <cstring>
 #include <vector>
+#include "parameters.h"
 #include "rand_walk.h"
 #include "fcc_diffusion.h"
 #include "octree.h"
@@ -64,7 +65,12 @@ typedef struct GPUData {
     // Physical constants
     double g;
     double tau;
+
+#ifdef RANDOM_KICK
     double phase_stdev;
+#elif defined CONSTANT_KICK
+    double phase_k;
+#endif
 
     // Related to the GPU's random number resources
     double *x, *y, *z; 
