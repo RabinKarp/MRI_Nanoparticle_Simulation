@@ -549,6 +549,10 @@ void simulateWaters(std::string filename) {
     if (eTime % 60 < 10) std::cout << "0";
     std::cout << eTime % 60 << " to build." << std::endl << std::endl;
 
+    // Sort the water molecules by their morton codes
+    // this can speed up performance by a factor of 1-2 !
+    lattice.sortWaters(waters, num_water, tree);
+
     GPUData d;
     setParameters(d);
     d.num_mnps = mnps->size();

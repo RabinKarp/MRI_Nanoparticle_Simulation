@@ -40,11 +40,14 @@ class FCC
     void initializeCells(XORShift<> &gen);
     void initializeLookupTable();
 
+    void sortWaters(water_info* waters, int num_water, Octree &tree);
+
     double diffusion_step(water_info *w, Octree *tree, XORShift<> &gen);
     std::vector<MNP_info> *init_mnps();
     water_info *init_molecules(int n, XORShift<> &gen);
     std::vector<MNP_info> *init_cluster(MNP_info &init, double r_pack,\
         int num_mnp, XORShift<> &gen);
+    
     void update_nearest_cell_full(water_info *w);
     Triple* linearLattice();
     void update_nearest_cell(water_info *w);

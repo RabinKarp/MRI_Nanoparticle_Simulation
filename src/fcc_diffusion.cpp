@@ -15,6 +15,7 @@
 #include "parameters.h"
 #include "fcc_diffusion.h"
 #include "rand_walk.h"
+#include <algorithm>
 
 #define CELL_TYPES 6
 
@@ -146,7 +147,6 @@ water_info *FCC::init_molecules(int n, XORShift<> &gen)
 #endif
         }
 
-
         temp->x = x;
         temp->y = y;
         temp->z = z;
@@ -154,7 +154,8 @@ water_info *FCC::init_molecules(int n, XORShift<> &gen)
         temp++;
     }
 
-    std::cerr << "Molecules initialized!" << std::endl;
+
+    std::cout << "Molecules initialized!" << std::endl;
     return molecules;
 }
 
@@ -192,6 +193,33 @@ std::vector<MNP_info> *FCC::init_mnps() {
 
     apply_bcs_on_mnps(mnps);
     return mnps;
+}
+
+struct SortStruct {
+    water_info w;
+    uint64_t mc;
+};
+
+bool compare(SortStruct &a, SortStruct &b) {
+    return a.mc < b.mc;
+}
+
+void FCC::sortWaters(water_info* waters, int num_waters, Octree &tree) {
+    SortStruct* objs = new SortStruct[num_waters];
+
+    for(int i = 0; i < num_waters; i++) {
+        objs[i].w = waters[i];
+        oct_node* voxel = tree.get_voxel(&(objs[i].w));
+        objs[i].mc = voxel->mc; 
+    }
+
+    std::sort(objs, objs + num_waters, compare);
+
+    for(int i = 0; i < num_waters; i++) {
+        waters[i] = objs[i].w;
+    }
+
+    delete[] objs; 
 }
 
 /**

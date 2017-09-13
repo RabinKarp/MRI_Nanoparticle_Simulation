@@ -30,8 +30,8 @@ const double border = 6;    // boundary from box where we start applying BC's
 const int num_threads = 16; // number of CPU threads to run T2 simulation on
 
 /* Switches for enabling or disabling debugging output files */
-#define DEBUG_LATTICE        // create output file w/ cell centers and neighbors?
-#define DEBUG_MNPS           // create output file w/ all MNP coordinates?
+#undef DEBUG_LATTICE        // create output file w/ cell centers and neighbors?
+#undef DEBUG_MNPS           // create output file w/ all MNP coordinates?
 #undef DEBUG_TREE           // check water/node residency via assertions?
 #undef DEBUG_FIELD          // create output file w/ B_z at all leaf nodes?
 
@@ -46,17 +46,17 @@ const int sprintSteps = 20000; // Each kernel execution handles AT MOST this man
 const int num_water = 4032;             // number of waters in simulation
 
 /* Related to the cells in the simulation*/
-const int num_cells = 154;               // Number of randomly thrown cells
+const int num_cells = 513;               // Number of randomly thrown cells
 const double cell_r = .55;                // cell radius in microns
 
-const double mmoment = 8.1957e-16;         // Magnetic moment for each cell
+const double mmoment = 8.1957e-18;         // Magnetic moment for each cell
 
 // Exactly ONE of the two flags below must be set
 #define CONSTANT_KICK
 #undef RANDOM_KICK
 
 #ifdef CONSTANT_KICK 
-const double phase_k = 1.0;             // Intracellular ph. kick is k * dt at each tstep
+const double phase_k = 2*3.14*42*7*2.1e-3;             // Intracellular ph. kick is k * dt at each tstep
 #elif defined RANDOM_KICK
 const double phase_stdev = 1.0;         // St. dev. of intracellular phase accumulation
 #endif
@@ -82,7 +82,7 @@ const int maxNeighbors = 13;
 /* Constants affecting diffusion */
 const double D_cell = .5547;            // D in micron^2 per ms
 const double D_extra = 1.6642;          // D in micron^2 per ms
-const double P_expr = 0.01;             // permeability in micron per ms
+const double P_expr = 0.2;             // permeability in micron per ms
 
 /**
  * Each of the following doubles is in the range 0 to 1 and gives
@@ -93,11 +93,12 @@ const double P_expr = 0.01;             // permeability in micron per ms
  * To make cells impermeable, set both of these numbers to 1. To make cell boundaries nonexistant,
  * set both numbers to 0.   
  */
-const double reflectIO =1; // 1 - sqrt(tau / (6*D_in)) * 4 * P_expr;
-const double reflectOI =1; // 1 - ((1 - reflectIO) * sqrt(D_in/D_out));
 
-/* Time scales and step sizes */
-const double tau = 1e-6;                // time step in ms - currently must be power of 10
+const double tau = 1e-6;
+const double reflectIO = 1 - sqrt(tau / (6*D_cell)) * 4 * P_expr;
+const double reflectOI = 1 - ((1 - reflectIO) * sqrt(D_cell/D_extra));
+
+/* Time scales and step sizes */        // tau defines time step in ms - currently must be power of 10
 const int totaltime = 40;               // total time to run for in ms - because of GPU architecture, this
                                         // is constrained to be a discrete integer
 const int t = (int)(totaltime/tau);     // Total time steps
