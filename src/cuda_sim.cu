@@ -48,8 +48,8 @@ const int pfreq = (int)(pInt/tau);      // print net magnetization every 1us
 const double alpha = 1;
 const double beta = 0;
 
-#define num_uniform_doubles 4 // # of uniform doubles per tstep used to generate random direction 
-#define num_normal_doubles 2  // # of normal  doubles per water per tstep
+#define num_uniform_doubles 5 // # of uniform doubles per tstep used to generate random direction 
+#define num_normal_doubles 1  // # of normal  doubles per water per tstep
 
 //==============================================================================
 // Octree-related functions
@@ -273,6 +273,7 @@ void setParameters(GPUData &d) {
 
 #ifdef RANDOM_KICK
     d.phase_stdev = phase_stdev;
+    d.phase_k = phase_k;
 #elif defined CONSTANT_KICK
     d.phase_k = phase_k;
 #endif 
@@ -372,7 +373,7 @@ __device__ double accumulatePhase(double &wx, double &wy, double &wz,
 
 #ifdef RANDOM_KICK
     // If inside a cell, add a random kick (when the flag is defined)
-    phase += (in_cell) * nD * d.phase_stdev;
+    phase += (in_cell) * nD * d.phase_stdev*d.tau+d.phase_k*d.tau;
 #elif defined CONSTANT_KICK
     // If inside a cell, add a constant kick (when the flag is defined)
     phase += (in_cell) * d.phase_k * d.tau;
@@ -621,7 +622,7 @@ void simulateWaters(std::string filename) {
         computePhaseAccumulation<<<num_phase_blocks, threads_per_block>>>
             (d.coins, 
              d.in_cell, 
-             d.normal_doubles + sprintSteps * num_water, 
+             dev_uniform.dp() + 4 * sprintSteps * num_water, 
              sprintSteps * num_water, 
              d);
 

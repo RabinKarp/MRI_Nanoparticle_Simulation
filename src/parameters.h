@@ -46,7 +46,7 @@ const int sprintSteps = 20000; // Each kernel execution handles AT MOST this man
 const int num_water = 4032;             // number of waters in simulation
 
 /* Related to the cells in the simulation*/
-const int num_cells = 513;               // Number of randomly thrown cells
+const int num_cells = 257;               // Number of randomly thrown cells
 const double cell_r = .55;                // cell radius in microns
 
 const double mmoment = 8.1957e-18;         // Magnetic moment for each cell
@@ -59,10 +59,11 @@ const double mmoment = 8.1957e-18;         // Magnetic moment for each cell
 const double phase_k = 2*3.14*42*7*2.1e-3;             // Intracellular ph. kick is k * dt at each tstep
 #elif defined RANDOM_KICK
 const double phase_stdev = 1.0;         // St. dev. of intracellular phase accumulation
+const double phase_k = 2*3.14*42*7*2.1e-3;
 #endif
 
 /* Related to the simulation bounds */
-const double bound = 40;                // full box is [0, bound]^3 (microns)
+const double bound = 20;                // full box is [0, bound]^3 (microns)
 
 /* All water molecules begin the simulation in a box with dimension
    water_start_bound^3 that is centered in the middle of the larger
@@ -73,7 +74,7 @@ const double water_start_bound = 10;
  * Define the flag below to force the simulation to avoid throwing water
  * molecules inside of cells initially. 
  */
-#define AVOID_INTRACELLULAR_THROW
+#undef AVOID_INTRACELLULAR_THROW
 
 /* Parameters related to the optimized nearest cell finder */
 const int hashDim = 20;
