@@ -30,6 +30,10 @@
 ######################################
 */Run_Archive/*
 
+# All documentation #
+#####################
+docs/*
+
 # Vim and emacs swapfiles # 
 ###########################
 *.swp

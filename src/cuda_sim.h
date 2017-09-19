@@ -1,3 +1,12 @@
+/**
+ * @author  Vivek Bharadwaj
+ * @date    18 September 2017.
+ * @file    cuda_sim.h 
+ * @brief   Contains a single public function definition to simulate diffusion
+ *          and phase kicks experienced by molecules within a simulation box
+ *          with waters, semi-permeable cell boundaries, and magnetic dipoles.
+ */
+
 #ifndef SIM_HEADER
 #define SIM_HEADER
 
@@ -11,13 +20,23 @@
 
 using namespace std;
 
-typedef struct gpu_node {
+/**
+ * The gpu_node struct is the GPU analogue of the CPU struct oct_node.
+ * It contains a 64 bit morton code, a set of child nodes, a specified
+ * number of resident MNPs, and a pointer to an array of MNP residents.
+ */
+struct gpu_node {
     uint64_t mc;        // Morton code of node; leaf if leftmost bit is set
     B_idx child[8];     // child offsets (internal) or child B fields (leaves)
     int numResidents;
     MNP_info* resident;
 } gpu_node;
 
+/**
+ * The GPUData struct contains pointers to the arrays required by the
+ * GPU kernels to perform the diffusion simulations, as well as
+ * all relevant simulation parameters.
+ */
 typedef struct GPUData {
     // Related to the GPU
     int nBlocks;
@@ -79,13 +98,7 @@ typedef struct GPUData {
 
     bool* in_cell;
 
-    /**
-     * The array of magnetizations is a double array of dimension
-     * (t * num_blocks). Each block writes to a unique portion of the shared
-     * global memory.
-     */
-     double* magnetizations;
-     long long int timesteps;
+    long long int timesteps;
 
      // Memory for debugging purposes only
      int *flags;

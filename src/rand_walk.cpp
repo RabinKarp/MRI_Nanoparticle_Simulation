@@ -1,4 +1,4 @@
-/*
+/**
  * @author  Aadyot Bhatnagar
  * @date    June 21, 2016
  * @file    rand_walk.cpp
@@ -12,7 +12,7 @@
 #include "rand_walk.h"
 #include "fcc_diffusion.h"
 
-/*
+/**
  * Returns an (x, y, z) displacement whose norm is equal to a specified d.
  */
 water_info rand_displacement(double d, XORShift<> &gen)
@@ -29,7 +29,7 @@ water_info rand_displacement(double d, XORShift<> &gen)
     return w;
 }
 
-/*
+/**
  * Simulates unbounded diffusion, given a diffusion length L and a number of
  * time steps.
  */
