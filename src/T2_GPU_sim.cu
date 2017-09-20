@@ -21,6 +21,7 @@ std::string generate_base_filename()
     filename += std::to_string((unsigned)(tau * 1e9));
     filename += "ps_T-e=";
     filename += std::to_string((unsigned)(2*taucp));
+    filename += "largedipole";
 
 #ifdef EXPLICIT
     filename += "_ex_";

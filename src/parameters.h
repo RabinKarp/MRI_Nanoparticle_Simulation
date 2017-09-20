@@ -49,7 +49,7 @@ const int num_water = 4032;             // number of waters in simulation
 const int num_cells = 257;               // Number of randomly thrown cells
 const double cell_r = .55;                // cell radius in microns
 
-const double mmoment = 8.1957e-18;         // Magnetic moment for each cell
+const double mmoment = 4e-17;         // Magnetic moment for each cell
 
 // Exactly ONE of the two flags below must be set
 #define CONSTANT_KICK
@@ -58,8 +58,8 @@ const double mmoment = 8.1957e-18;         // Magnetic moment for each cell
 #ifdef CONSTANT_KICK 
 const double phase_k = 2*3.14*42*7*2.1e-3;             // Intracellular ph. kick is k * dt at each tstep
 #elif defined RANDOM_KICK
-const double phase_stdev = 1.0;         // St. dev. of intracellular phase accumulation
-const double phase_k = 2*3.14*42*7*2.1e-3;
+const double phase_stdev = 2*3.14*1.5*1e-3*42*7*50;         // St. dev. of intracellular phase accumulation
+const double phase_k = 5.25;             //Chemical shift in ppm
 #endif
 
 /* Related to the simulation bounds */

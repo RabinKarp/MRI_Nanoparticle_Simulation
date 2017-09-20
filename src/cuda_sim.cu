@@ -372,8 +372,8 @@ __device__ double accumulatePhase(double &wx, double &wy, double &wz,
     double phase = 0;
 
 #ifdef RANDOM_KICK
-    // If inside a cell, add a random kick (when the flag is defined)
-    phase += (in_cell) * nD * d.phase_stdev*d.tau+d.phase_k*d.tau;
+    // If inside a cell, add a random kick drawn from the Cauchy distribution (when the flag is defined).
+    phase += (in_cell) *( d.phase_stdev*sqrt(1/(abs(nD-.5)*2)-1)*(((nD-.5)>0) - ((nD-.5))<0) * d.tau+d.phase_k*1e-3*42.58*2*M_PI*7*d.tau);
 #elif defined CONSTANT_KICK
     // If inside a cell, add a constant kick (when the flag is defined)
     phase += (in_cell) * d.phase_k * d.tau;
