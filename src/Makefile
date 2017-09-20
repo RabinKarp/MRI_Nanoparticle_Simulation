@@ -1,6 +1,6 @@
 # Compiling local simulation files
 
-L_OBJS=T2_GPU_sim.o gpu_random.o cuda_sim.o fcc_diffusion.o rand_walk.o octree.o 
+L_OBJS=T2_GPU_sim.o gpu_random.o cuda_sim.o SimulationBox.o BacteriaBox.o rand_walk.o octree.o 
 PARAMS=parameters.h
 #==============================================================================
 # Compiling CUDA utilities from git submodule

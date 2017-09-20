@@ -14,6 +14,7 @@
 #include <fstream>
 #include <cassert>
 #include <vector>
+#include <algorithm>
 
 using namespace std;
 
@@ -143,7 +144,7 @@ void SimulationBox::sortWaters() {
         objs[i].mc = voxel->mc; 
     }
 
-    std::sort(objs, objs + num_waters, compare);
+    sort(objs, objs + num_waters, compare);
 
     for(int i = 0; i < num_waters; i++) {
         waters[i] = objs[i].w;

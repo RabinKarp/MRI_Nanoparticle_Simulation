@@ -10,7 +10,6 @@
 #include <cmath>
 #include <iostream>
 #include "rand_walk.h"
-#include "fcc_diffusion.h"
 
 /**
  * Returns an (x, y, z) displacement whose norm is equal to a specified d.

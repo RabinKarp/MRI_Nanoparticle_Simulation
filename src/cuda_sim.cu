@@ -23,6 +23,7 @@
 #include <time.h>
 #include <stdlib.h>
 #include <string>
+#include "random"
 
 #include <vector>
 #include <fstream>
@@ -31,7 +32,7 @@
 #include "math.h"
 
 #include "parameters.h"
-#include "fcc_diffusion.h"
+#include "BacteriaBox.h"
 #include "gpu_random.h"
 #include "octree.h"
 
@@ -396,6 +397,20 @@ void destroyTree(GPUData &d) {
 //==============================================================================
 
 /**
+ * Frees the nearest cell lookup table stored on the GPU.
+ *
+ * @param d     A reference to the GPUData class storing a pointer to the 
+ *              nearest cell lookup table on the GPU
+ */
+void destroyLookupDevice(GPUData &d) {
+    for(int i = 0; i < hashDim * hashDim * hashDim; i++) {
+        cudaFree(d.localLookup[i]);
+    }
+    cudaFree(d.lookupTable);
+    delete[] d.localLookup;
+}
+
+/**
  * Releases the octree and the nearest cell lookup table in GPU memory.
  *
  * @param d     A reference to the GPUData object containing the octree and
@@ -414,8 +429,8 @@ void finalizeGPU(GPUData &d) {
  * @param d     A reference to the GPUData object to set relevant parameters in
  */
 void setParameters(GPUData &d) {
-    d.in_stdev = sqrt(pi * D_cell * tau);
-    d.out_stdev = sqrt(pi * D_extra * tau);
+    d.in_stdev = sqrt(M_PI * D_cell * tau);
+    d.out_stdev = sqrt(M_PI * D_extra * tau);
 
     d.reflectIO = reflectIO; 
     d.reflectOI = reflectOI; 
@@ -871,20 +886,6 @@ void cpyLookupDevice(int **sourceTable, GPUData &d) {
 }
 
 /**
- * Frees the nearest cell lookup table stored on the GPU.
- *
- * @param d     A reference to the GPUData class storing a pointer to the 
- *              nearest cell lookup table on the GPU
- */
-void destroyLookupDevice(GPUData &d) {
-    for(int i = 0; i < hashDim * hashDim * hashDim; i++) {
-        cudaFree(d.localLookup[i]);
-    }
-    cudaFree(d.lookupTable);
-    delete[] d.localLookup;
-}
-
-/**
  * Simulates the diffusion and phase kicks experienced by water molecules
  * in a BacteriaBox simulation model. The function operates in the following
  * steps:
@@ -947,7 +948,7 @@ void simulateWaters(std::string filename) {
     // Initialize a structure containing data to be shuttled to the GPU
     GPUData d;
     setParameters(d);
-    d.num_mnps = simbox.getMNPCount(); 
+    d.num_mnps = simBox.getMNPCount(); 
     initOctree(simBox.getOctree(), d);
 
     // Compute number of uniform and random doubles needed for each sprint
@@ -956,7 +957,7 @@ void simulateWaters(std::string filename) {
     int initTime = 0;
  
     // GPU memory allocations performed here
-    p_array<water_info> dev_waters(num_water, simbox.getWaters(), d.waters);
+    p_array<water_info> dev_waters(num_water, simBox.getWaters(), d.waters);
     p_array<Triple> dev_lattice(num_cells, simBox.getCells(), d.lattice); 
 
     // Partition out the uniform random numbers

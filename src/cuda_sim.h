@@ -14,7 +14,7 @@
 #include <vector>
 #include "parameters.h"
 #include "rand_walk.h"
-#include "fcc_diffusion.h"
+#include "BacteriaBox.h"
 #include "octree.h"
 #include "cuda.h"
 
@@ -25,7 +25,7 @@ using namespace std;
  * It contains a 64 bit morton code, a set of child nodes, a specified
  * number of resident MNPs, and a pointer to an array of MNP residents.
  */
-struct gpu_node {
+typedef struct gpu_node {
     uint64_t mc;        // Morton code of node; leaf if leftmost bit is set
     B_idx child[8];     // child offsets (internal) or child B fields (leaves)
     int numResidents;
