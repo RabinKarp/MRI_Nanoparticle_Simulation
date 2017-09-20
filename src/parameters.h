@@ -15,11 +15,10 @@
 
 #define HIGH        5000000
 #define MAX_MNPS    1000    // Upper bound to number of cells in the simulation (modify as needed)
-#define M_PI        3.14159265358979323846
 
 /* Parameters affecting nanoparticle residency in nodes */
 #undef FULL_BOUNDARIES      // use full boundary conditions to calculate field?
-const double raw_scale = 7; // calculate B explicitly within scale*R of cluster
+const double raw_scale = 2; // calculate B explicitly within scale*R of cluster
 const double scale = raw_scale;
 
 #ifndef FULL_BOUNDARIES     // otherwise, apply BC's at some cutoff distance

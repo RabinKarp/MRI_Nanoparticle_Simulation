@@ -1,4 +1,4 @@
-/*
+/**
  * @author  Aadyot Bhatnagar
  * @date    June 21, 2016
  * @file    rand_walk.h
@@ -13,9 +13,8 @@
 #include "parameters.h"
 #include "xorshift.h"
 #define NORMSQ(x, y, z) (x)*(x)+(y)*(y)+(z)*(z)     // compute the norm-squared
-const double pi = atan(1) * 4;                      // global constant for pi
 
-/*
+/**
  * This structure contains information about a water molecule, including its
  * position in (x,y,z) coordinates, the number of times it has crossed the
  * periodic x boundary (and in which direction), and the phase of its
@@ -25,12 +24,11 @@ const double pi = atan(1) * 4;                      // global constant for pi
 typedef struct water_info {
     double x, y, z;
     double phase=0;
-    char cross_x=0, cross_y=0, cross_z=0;
     bool in_cell;
     int nearest;
 
   public:
-    /*
+    /**
      * The addition of a water_info struct w to this entails adding the (x,y,z)
      * coordinates of w to the coordinates of this.
      */
@@ -41,7 +39,7 @@ typedef struct water_info {
         this->z += w.z;
     }
 
-    /*
+    /**
      * The -= operation behaves in essentially the same way as the += operator.
      */
     void operator-=(struct water_info &w)
@@ -53,7 +51,9 @@ typedef struct water_info {
 
 } water_info;
 
-/* Describes a magnetic nanoparticle */
+/** 
+ * Describes a magnetic nanoparticle 
+ */
 typedef struct MNP_info
 {
     double x, y, z; // coordinates of center
