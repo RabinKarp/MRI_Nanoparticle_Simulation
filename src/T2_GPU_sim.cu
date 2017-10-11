@@ -28,9 +28,9 @@ using namespace std;
 std::string generate_base_filename()
 {
     std::string filename("tau=");
-    filename += std::to_string((unsigned)(tau * 1e9));
+    filename += std::to_string((unsigned)(p.tau * 1e9));
     filename += "ps_T-e=";
-    filename += std::to_string((unsigned)(2*taucp));
+    filename += std::to_string((unsigned)(2*p.taucp));
     filename += "largedipole";
 
 #ifdef EXPLICIT
@@ -39,7 +39,7 @@ std::string generate_base_filename()
 
 #ifndef FULL_BOUNDARIES
     filename += "_border=";
-    filename += std::to_string((unsigned)(border));
+    filename += std::to_string((unsigned)(p.border));
     filename += "um_";
 #endif
     filename += "impermeablemultitrial";

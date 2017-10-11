@@ -13,7 +13,7 @@
 #include <cmath>
 #include <string>
 
-// #define HIGH        5000000
+#define STCONST static const
 
 /* Switches for enabling or disabling debugging output files */
 #undef DEBUG_LATTICE        // create output file w/ cell centers and neighbors?
@@ -22,52 +22,53 @@
 #undef DEBUG_FIELD          // create output file w/ B_z at all leaf nodes?
 
 
-struct ParameterStruct { 
-    double g = 42.5781e6;             // gyromagnetic ratio in MHz/T
+struct ParameterStruct {
+public:
+    STCONST double g = 42.5781e6;             // gyromagnetic ratio in MHz/T
     
     #undef FULL_BOUNDARIES      // use full boundary conditions to calculate field?
-    double scale = 2;     // calculate B explicitly within scale*R of clusterj 
+    STCONST double scale = 2;     // calculate B explicitly within scale*R of clusterj 
 
     #ifndef FULL_BOUNDARIES     // otherwise, apply BC's at some cutoff distance
-    double border = 6;    // boundary from box where we start applying BC's
+    STCONST double border = 6;    // boundary from box where we start applying BC's
     #endif
 
-    int num_threads = 16; // number of CPU threads to run T2 simulation on
+    STCONST int num_threads = 16; // number of CPU threads to run T2 simulation on
 
     /* Related to the CUDA kernel */
     #define threads_per_block 192 // Keep this as a multiple of 64
 
     // The variable below must be a multiple of the printing frequency
-    int sprintSteps = 20000; // Each kernel execution handles AT MOST this many timesteps
+    STCONST int sprintSteps = 20000; // Each kernel execution handles AT MOST this many timesteps
 
 
     /* Molecule information; simulation performs at its peak when num_water is divisible by 64 */
-    int num_water = 4032;             // number of waters in simulation
+    STCONST int num_water = 4032;             // number of waters in simulation
 
     /* Related to the cells in the simulation*/
-    int num_cells = 257;               // Number of randomly thrown cells
-    double cell_r = .55;                // cell radius in microns
+    STCONST int num_cells = 257;               // Number of randomly thrown cells
+    STCONST double cell_r = .55;                // cell radius in microns
 
-    double mmoment = 4e-17;         // Magnetic moment for each cell
+    STCONST double mmoment = 4e-17;         // Magnetic moment for each cell
 
     // Exactly ONE of the two flags below must be set
     #define CONSTANT_KICK
     #undef RANDOM_KICK
 
     #ifdef CONSTANT_KICK 
-    double phase_k = 2*3.14*42*7*2.1e-3;             // Intracellular ph. kick is k * dt at each tstep
+    STCONST double phase_k = 2*3.14*42*7*2.1e-3;             // Intracellular ph. kick is k * dt at each tstep
     #elif defined RANDOM_KICK
-    double phase_stdev = 2*3.14*1.5*1e-3*42*7*50;         // St. dev. of intracellular phase accumulation
-    double phase_k = 5.25;             //Chemical shift in ppm
+    STCONST double phase_stdev = 2*3.14*1.5*1e-3*42*7*50;         // St. dev. of intracellular phase accumulation
+    STCONST double phase_k = 5.25;             //Chemical shift in ppm
     #endif
 
     /* Related to the simulation bounds */
-    double bound = 20;                // full box is [0, bound]^3 (microns)
+    STCONST double bound = 20;                // full box is [0, bound]^3 (microns)
 
     /* All water molecules begin the simulation in a box with dimension
        water_start_bound^3 that is centered in the middle of the larger
        simulation box. Given in microns. */
-    double water_start_bound = 10;
+    STCONST double water_start_bound = 10;
 
     /**
      * Define the flag below to force the simulation to avoid throwing water
@@ -76,14 +77,33 @@ struct ParameterStruct {
     #undef AVOID_INTRACELLULAR_THROW
 
     /* Parameters related to the optimized nearest cell finder */
-    int hashDim = 20;
-    int maxNeighbors = 13;
+    STCONST int hashDim = 20;
+    STCONST int maxNeighbors = 13;
 
     /* Constants affecting diffusion */
-    double D_cell = .5547;            // D in micron^2 per ms
-    double D_extra = 1.6642;          // D in micron^2 per ms
-    double P_expr = 0.2;             // permeability in micron per ms
+    STCONST double D_cell = .5547;            // D in micron^2 per ms
+    STCONST double D_extra = 1.6642;          // D in micron^2 per ms
+    STCONST double P_expr = 0.2;             // permeability in micron per ms
 
+    STCONST double tau = 1e-6; // Units of Microseconds
+    
+    /* Time scales and step sizes */        // tau defines time step in ms - currently must be power of 10
+    STCONST int totaltime = 40;               // total time to run for in ms - because of GPU architecture, this
+                                            // is constrained to be a discrete integer
+    STCONST int t = (int)(totaltime/tau);     // Total time steps
+    STCONST double taucp = 5.5;               // Carr-Purcell time in ms - up to 3 decimal places of precision 
+    STCONST int tcp = (int)(taucp/tau);       // time steps per Carr-Purcell time
+
+    
+    // The following parameters are assigned values in the constructor below in this file 
+    double reflectIO; // Assign values in constructor below, not here
+    double reflectOI;
+
+    // St. dev of displacements inside and outside cells 
+    double in_stdev; // Assign values in constructor below, not here 
+    double out_stdev;
+
+    ParameterStruct(int dummy_flag) {
     /**
      * Each of the following doubles is in the range 0 to 1 and gives
      * the probability that a given water molecule will bounce off the cell boundary
@@ -93,25 +113,19 @@ struct ParameterStruct {
      * To make cells impermeable, set both of these numbers to 1. To make cell boundaries nonexistant,
      * set both numbers to 0.   
      */
+        reflectIO = 1 - sqrt(tau / (6*D_cell)) * 4 * P_expr;
+        reflectOI = 1 - ((1 - reflectIO) * sqrt(D_cell/D_extra));
 
-    double tau = 1e-6; // Units of Microseconds
-    double reflectIO = 1 - sqrt(tau / (6*D_cell)) * 4 * P_expr;
-    double reflectOI = 1 - ((1 - reflectIO) * sqrt(D_cell/D_extra));
+        // St. dev of displacements inside and outside cells 
+        in_stdev = sqrt(M_PI * D_cell * tau);
+        out_stdev = sqrt(M_PI * D_extra * tau);
+    }
 
-    // St. dev of displacements inside and outside cells 
-    double in_stdev = sqrt(M_PI * D_cell * tau);
-    double out_stdev = sqrt(M_PI * D_extra * tau);
+    ParameterStruct() {
+    }
+}; 
 
-
-    /* Time scales and step sizes */        // tau defines time step in ms - currently must be power of 10
-    int totaltime = 40;               // total time to run for in ms - because of GPU architecture, this
-                                            // is constrained to be a discrete integer
-    int t = (int)(totaltime/tau);     // Total time steps
-    double taucp = 5.5;               // Carr-Purcell time in ms - up to 3 decimal places of precision 
-    int tcp = (int)(taucp/tau);       // time steps per Carr-Purcell time
-
-} p;
-
+extern ParameterStruct p;
 const std::string delim = ",";          // Delimiter for output CSV file
 
 #endif /* PARAMETERS_H */

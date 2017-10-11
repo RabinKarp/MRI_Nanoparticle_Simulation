@@ -38,10 +38,11 @@
 
 using namespace std;
 
-const int num_blocks = (num_water + threads_per_block - 1) / threads_per_block;
+ParameterStruct p(0); 
+const int num_blocks = (p.num_water + threads_per_block - 1) / threads_per_block;
 
 const double pInt = 1e-3;
-const int pfreq = (int)(pInt/tau);      // print net magnetization every 1us
+const int pfreq = (int)(pInt/p.tau);      // print net magnetization every 1us
 
 // Constants for lin. alg. operations, not part of the parameter structure
 const double alpha = 1;
@@ -129,9 +130,9 @@ inline __device__ uint64_t morton_code(int depth, double &x, double &y,
     double &z, GPUData &d) {
    
     uint64_t size = 1 << (depth);
-    uint32_t idx_x = floor(x / d.bound * size);
-    uint32_t idx_y = floor(y / d.bound * size);
-    uint32_t idx_z = floor(z / d.bound * size);
+    uint32_t idx_x = floor(x / params.bound * size);
+    uint32_t idx_y = floor(y / params.bound * size);
+    uint32_t idx_z = floor(z / params.bound * size);
     uint64_t answer = 0;
     // start by shifting the third byte, since we only look @ the first 21 bits
     if (depth > 16)
@@ -403,7 +404,7 @@ void destroyTree(GPUData &d) {
  * Initializes a structure containing the simulation parameters on the GPU.
  */
 void initGPUParams() {
-    HANDLE_ERROR(cudaMemcpytoSymbol(params, p, sizeof(ParameterStruct)));
+    HANDLE_ERROR(cudaMemcpyToSymbol(params, (void*) &p, sizeof(ParameterStruct)));
 }
 
 /**
@@ -413,7 +414,7 @@ void initGPUParams() {
  *              nearest cell lookup table on the GPU
  */
 void destroyLookupDevice(GPUData &d) {
-    for(int i = 0; i < hashDim * hashDim * hashDim; i++) {
+    for(int i = 0; i < p.hashDim * p.hashDim * p.hashDim; i++) {
         cudaFree(d.localLookup[i]);
     }
     cudaFree(d.lookupTable);
@@ -450,7 +451,7 @@ void finalizeGPU(GPUData &d) {
  * @param d     A GPUData class containing relevant parameters
  */
 inline __device__ void updateNearest(water_info *w, GPUData &d) {
-    double cubeLength = d.bound / hashDim;
+    double cubeLength = params.bound / params.hashDim;
     int x_idx = w->x / cubeLength;
     int y_idx = w->y / cubeLength;
     int z_idx = w->z / cubeLength;
@@ -529,7 +530,7 @@ inline __device__ bool mnp_reflect(water_info *w, MNP_info *mnp,
     
     bool retValue = false;
 
-    for(int i = 0; i < params.num_mnps; i++) {
+    for(int i = 0; i < num_mnps; i++) {
         MNP_info* m = mnp + i;
         double dx = m->x - w->x;
         double dy = m->y - w->y;
@@ -628,12 +629,12 @@ inline __device__ double accumulatePhase(double &wx, double &wy, double &wz,
 
 #ifdef RANDOM_KICK
     // If inside a cell, add a random kick drawn from the Cauchy distribution (when the flag is defined).
-    phase += (in_cell) *( d.phase_stdev*sqrt(1/(abs(nD-.5)*2)-1)*(((nD-.5)>0) - ((nD-.5))<0) * d.tau+d.phase_k*1e-3*42.58*2*M_PI*7*d.tau);
+    phase += (in_cell) *( params.phase_stdev*sqrt(1/(abs(nD-.5)*2)-1)*(((nD-.5)>0) - ((nD-.5))<0) * params.tau+params.phase_k*1e-3*42.58*2*M_PI*7*params.tau);
 #elif defined CONSTANT_KICK
     // If inside a cell, add a constant kick (when the flag is defined)
-    phase += (in_cell) * d.phase_k * d.tau;
+    phase += (in_cell) * params.phase_k * params.tau;
 #endif 
-    phase += B * 2 * M_PI * d.g * d.tau * 1e-3;
+    phase += B * 2 * M_PI * params.g * params.tau * 1e-3;
 
     return phase;
 }
@@ -688,7 +689,7 @@ __global__ void simulateDiffusion(GPUData d)  {
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
     water_info w;
 
-    if(tid < num_water) {
+    if(tid < params.num_water) {
         // Copy water to local register 
         w = d.waters[tid];
         updateNearest(&w, d);
@@ -704,7 +705,7 @@ __global__ void simulateDiffusion(GPUData d)  {
         r_nums.coin = d.coins;
         r_nums.advancePointer(tid);
 
-        for(int i = 0; i < d.timesteps; i++) {
+        for(int i = 0; i < params.sprintSteps; i++) {
             water_info init = w;
 
             water_info disp = rand_displacement(&w, &r_nums, d);
@@ -726,8 +727,8 @@ __global__ void simulateDiffusion(GPUData d)  {
             *(r_nums.z) = w.z; 
             *inc_ptr = w.in_cell;
 
-            inc_ptr += num_water;
-            r_nums.advancePointer(d.num_waters); 
+            inc_ptr += params.num_water;
+            r_nums.advancePointer(params.num_water); 
         }
         
     }
@@ -735,11 +736,11 @@ __global__ void simulateDiffusion(GPUData d)  {
     // Update the running time counter
     __syncthreads();
     if(tid == 0) {
-        *d.time += d.timesteps;
+        *d.time += params.sprintSteps;
     }
 
     // Copy the register water molecule back to global memory
-    if(tid < num_water) {
+    if(tid < params.num_water) {
         d.waters[tid] = w;
     }
 }
@@ -846,13 +847,13 @@ __global__ void flipPhases(water_info* __restrict__ waters, int len) {
  *                      to the GPU lookup table.
  */
 void cpyLookupDevice(int **sourceTable, GPUData &d) {
-    int h3 = hashDim * hashDim * hashDim;
+    int h3 = p.hashDim * p.hashDim * p.hashDim;
     d.localLookup = new int*[h3];
 
     for(int i = 0; i < h3; i++) {
-        d.localLookup[i] = (int *) cudaAllocate(maxNeighbors * sizeof(int));
+        d.localLookup[i] = (int *) cudaAllocate(p.maxNeighbors * sizeof(int));
         copyToDevice((void *) d.localLookup[i], (void *) sourceTable[i],
-            maxNeighbors * sizeof(int));
+            p.maxNeighbors * sizeof(int));
     }
     d.lookupTable = (int**) cudaAllocate(h3 * sizeof(int**));
     copyToDevice((void *) d.lookupTable, d.localLookup,
@@ -916,35 +917,34 @@ void simulateWaters(std::string filename) {
 
     // Initialize a simulation box containing the waters, MNPs, and cells,
     // and populate it with those components
-    BacteriaBox simBox(num_cells, num_water, &gen);
+    BacteriaBox simBox(&gen);
     simBox.populateSimulation();
 
     // Initialize a structure containing data to be shuttled to the GPU
     GPUData d;
-    initGPUParams();
-    d.num_mnps = simBox.getMNPCount(); 
+    initGPUParams(); 
     initOctree(simBox.getOctree(), d);
 
     // Compute number of uniform and random doubles needed for each sprint
-    int totalUniform =  num_uniform_doubles * num_water * sprintSteps;
-    int totalNormal = num_normal_doubles * num_water * sprintSteps;
+    int totalUniform =  num_uniform_doubles * p.num_water * p.sprintSteps;
+    int totalNormal = num_normal_doubles * p.num_water * p.sprintSteps;
     int initTime = 0;
  
     // GPU memory allocations performed here
-    p_array<water_info> dev_waters(num_water, simBox.getWaters(), d.waters);
-    p_array<Triple> dev_lattice(num_cells, simBox.getCells(), d.lattice); 
+    p_array<water_info> dev_waters(p.num_water, simBox.getWaters(), d.waters);
+    p_array<Triple> dev_lattice(p.num_cells, simBox.getCells(), d.lattice); 
 
     // Partition out the uniform random numbers
     d_array<double> dev_uniform(totalUniform);
     d.x = dev_uniform.dp();
-    d.y = dev_uniform.dp() + sprintSteps * num_water;
-    d.z = dev_uniform.dp() + 2 * sprintSteps * num_water;
-    d.coins = dev_uniform.dp() + 3 * sprintSteps * num_water;
+    d.y = dev_uniform.dp() + p.sprintSteps * p.num_water;
+    d.z = dev_uniform.dp() + 2 * p.sprintSteps * p.num_water;
+    d.coins = dev_uniform.dp() + 3 * p.sprintSteps * p.num_water;
 
     d_array<double> dev_normal(totalNormal, d.normal_doubles);
     p_array<int> dev_time(1, &initTime, d.time);
-    d_array<double> update(num_water);
-    d_array<bool> d_in_cell(num_water * sprintSteps, d.in_cell);
+    d_array<double> update(p.num_water);
+    d_array<bool> d_in_cell(p.num_water * p.sprintSteps, d.in_cell);
 
     // Wrap the phase update in a thrust device pointer for summation
     thrust::device_ptr<double> td_ptr = thrust::device_pointer_cast(update.dp());
@@ -971,7 +971,7 @@ void simulateWaters(std::string filename) {
 
     // Run the kernel in sprints 
     int time = 0;
-    for(int i = 0; i < (t / sprintSteps); i++) {
+    for(int i = 0; i < (p.t / p.sprintSteps); i++) {
         // Get the random numbers needed for the simulation
         gpu_rand_gen.getUniformDoubles(totalUniform, dev_uniform.dp());
         gpu_rand_gen.getNormalDoubles(totalNormal, dev_normal.dp());
@@ -983,8 +983,8 @@ void simulateWaters(std::string filename) {
         computePhaseAccumulation<<<num_phase_blocks, threads_per_block>>>
             (d.coins, 
              d.in_cell, 
-             dev_uniform.dp() + 4 * sprintSteps * num_water, 
-             sprintSteps * num_water, 
+             dev_uniform.dp() + 4 * p.sprintSteps * p.num_water, 
+             p.sprintSteps * p.num_water, 
              d);
 
         /** 
@@ -993,13 +993,13 @@ void simulateWaters(std::string filename) {
          * store phase kicks. After each summation, we use another kernel to 
          * update the water molecules' phases and perform a memory reduction.
          */
-        for(int j = 0; j < sprintSteps; j += pfreq) {
+        for(int j = 0; j < p.sprintSteps; j += pfreq) {
             cublasDgemv(
                 handle.cublasH, 
                 CUBLAS_OP_N,
-                num_water, pfreq,
+                p.num_water, pfreq,
                 &alpha,
-                d.coins + j * num_water, num_water,
+                d.coins + j * p.num_water, p.num_water,
                 ones.dp(), 1,
                 &beta,
                 update.dp(), 1 
@@ -1007,19 +1007,19 @@ void simulateWaters(std::string filename) {
 
             // Add the accumulated phases to the water molecules' variables
             performUpdate<<<num_blocks, threads_per_block>>>(d.waters, 
-                update.dp(), num_water);
+                update.dp(), p.num_water);
 
             // Get the magnetization sum via thrust reduction 
-            double target = thrust::reduce(td_ptr, td_ptr + num_water);
+            double target = thrust::reduce(td_ptr, td_ptr + p.num_water);
 
             time += pfreq;
 
             // If time is a multiple of Carr-Purcell time, flip the phase
-            if(time % tcp == 0) {
-                flipPhases<<<num_blocks, threads_per_block>>>(d.waters, num_water);
+            if(time % p.tcp == 0) {
+                flipPhases<<<num_blocks, threads_per_block>>>(d.waters, p.num_water);
             } 
 
-            fout << ((double) time * tau) << delim << target << endl;  
+            fout << ((double) time * p.tau) << delim << target << endl;  
         }
     }
 
