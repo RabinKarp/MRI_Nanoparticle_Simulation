@@ -40,13 +40,15 @@ using namespace std;
 
 const int num_blocks = (num_water + threads_per_block - 1) / threads_per_block;
 
-const double g = 42.5781e6;             // gyromagnetic ratio in MHz/T
 const double pInt = 1e-3;
 const int pfreq = (int)(pInt/tau);      // print net magnetization every 1us
 
-// Constants for lin. alg. operations
+// Constants for lin. alg. operations, not part of the parameter structure
 const double alpha = 1;
 const double beta = 0;
+
+// Structure of constant parameters shuttled over to the GPU
+__constant__ ParameterStruct params;
 
 #define num_uniform_doubles 5 // # of uniform doubles per water per tstep 
 #define num_normal_doubles 1  // # of normal  doubles per water per tstep
@@ -106,7 +108,7 @@ __device__ double dipole_field(double dx, double dy, double dz,
     
     double sqDist = NORMSQ(dx, dy, dz);
     double divisor = sqDist * sqDist * sqrt(sqDist);
-    return (sqDist > d.cell_r * d.cell_r) * M * 1e11 
+    return (sqDist > params.cell_r * params.cell_r) * M * 1e11 
         * (2*dz*dz - dx*dx - dy*dy) / divisor;
 }
 
@@ -324,7 +326,8 @@ void initOctree(Octree *oct, GPUData &d) {
                   localTree[i][j].numResidents = current[j].resident->size();
 
                   // This will become a device pointer
-                  localTree[i][j].resident = (MNP_info*) cudaAllocate(sizeof(MNP_info) * localTree[i][j].numResidents);
+                  localTree[i][j].resident = (MNP_info*)
+                      cudaAllocate(sizeof(MNP_info) * localTree[i][j].numResidents);
                   d.addresses->push_back((void*) localTree[i][j].resident);
                   // Copy MNPs to device
                   copyToDevice((void *) localTree[i][j].resident,
@@ -397,6 +400,13 @@ void destroyTree(GPUData &d) {
 //==============================================================================
 
 /**
+ * Initializes a structure containing the simulation parameters on the GPU.
+ */
+void initGPUParams() {
+    HANDLE_ERROR(cudaMemcpytoSymbol(params, p, sizeof(ParameterStruct)));
+}
+
+/**
  * Frees the nearest cell lookup table stored on the GPU.
  *
  * @param d     A reference to the GPUData class storing a pointer to the 
@@ -419,42 +429,6 @@ void destroyLookupDevice(GPUData &d) {
 void finalizeGPU(GPUData &d) {
     destroyLookupDevice(d); 
     destroyTree(d);
-}
-
-/**
- * Copies over parameters defined in CPU memory to variables within the GPUData
- * class passed as a reference, which will be used for constant reference
- * on the GPU.
- *
- * @param d     A reference to the GPUData object to set relevant parameters in
- */
-void setParameters(GPUData &d) {
-    d.in_stdev = sqrt(M_PI * D_cell * tau);
-    d.out_stdev = sqrt(M_PI * D_extra * tau);
-
-    d.reflectIO = reflectIO; 
-    d.reflectOI = reflectOI; 
-    d.tcp = tcp;
-
-    d.num_cells = num_cells;
-    d.num_waters = num_water;
-    d.timesteps = sprintSteps;
-    d.cell_r = cell_r;
-    d.bound = bound;
-    d.nBlocks = num_blocks;
-    d.g = g;
-    d.tau = tau;
-    d.bound = bound;
-    d.pfreq = pfreq;
-    d.hashDim = hashDim;
-
-#ifdef RANDOM_KICK
-    d.phase_stdev = phase_stdev;
-    d.phase_k = phase_k;
-#elif defined CONSTANT_KICK
-    d.phase_k = phase_k;
-#endif 
-
 }
 
 //==============================================================================
@@ -483,12 +457,12 @@ inline __device__ void updateNearest(water_info *w, GPUData &d) {
 
     // Get an array of candidate cells close to the lattice point
     int* nearest =
-        d.lookupTable[z_idx * d.hashDim * d.hashDim
-        + y_idx * d.hashDim
+        d.lookupTable[z_idx * params.hashDim * params.hashDim
+        + y_idx * params.hashDim
         + x_idx];
 
     // Some ridiculously high upper bound on the nearest distance
-    double cDist = d.bound * d.bound * 3;
+    double cDist = params.bound * params.bound * 3;
     int cIndex = -1;
    
     // Cycle through candidates, determine water molecule residency 
@@ -505,7 +479,7 @@ inline __device__ void updateNearest(water_info *w, GPUData &d) {
         nearest++;
     }
 
-    w->in_cell = (cDist < d.cell_r * d.cell_r);
+    w->in_cell = (cDist < params.cell_r * params.cell_r);
     w->nearest = cIndex;
 }
 
@@ -528,8 +502,8 @@ inline __device__ bool cell_reflect(water_info *i, water_info *f,
         t_rands *r_nums, GPUData &d) { 
     
     double coin = *(r_nums->coin); 
-    bool flip = (i->in_cell && (! f->in_cell) && coin < d.reflectIO)
-                    || ((! i->in_cell) && f->in_cell && coin < d.reflectOI);
+    bool flip = (i->in_cell && (! f->in_cell) && coin < params.reflectIO)
+                    || ((! i->in_cell) && f->in_cell && coin < params.reflectOI);
     return flip;
 }
 
@@ -555,7 +529,7 @@ inline __device__ bool mnp_reflect(water_info *w, MNP_info *mnp,
     
     bool retValue = false;
 
-    for(int i = 0; i < num_mnps; i++) {
+    for(int i = 0; i < params.num_mnps; i++) {
         MNP_info* m = mnp + i;
         double dx = m->x - w->x;
         double dy = m->y - w->y;
@@ -595,10 +569,10 @@ inline __device__ water_info rand_displacement(water_info *w,
     disp.z = *(r_nums->z) * 2 - 1.0;
 
     if(w->in_cell) {
-        norm *= d.in_stdev;
+        norm *= params.in_stdev;
     }
     else {
-        norm *= d.out_stdev;
+        norm *= params.out_stdev;
     }
 
     double nConstant = norm / sqrt(NORMSQ(disp.x, disp.y, disp.z));
@@ -620,9 +594,9 @@ inline __device__ water_info rand_displacement(water_info *w,
  * @param d     A GPUData class containing relevant parameters 
  */
 __device__ void boundary_conditions(water_info *w, GPUData &d) {
-    w->x = fmod(w->x + d.bound, d.bound);
-    w->y = fmod(w->y + d.bound, d.bound);
-    w->z = fmod(w->z + d.bound, d.bound);
+    w->x = fmod(w->x + params.bound, params.bound);
+    w->y = fmod(w->y + params.bound, params.bound);
+    w->z = fmod(w->z + params.bound, params.bound);
 }
 
 /**
@@ -947,7 +921,7 @@ void simulateWaters(std::string filename) {
 
     // Initialize a structure containing data to be shuttled to the GPU
     GPUData d;
-    setParameters(d);
+    initGPUParams();
     d.num_mnps = simBox.getMNPCount(); 
     initOctree(simBox.getOctree(), d);
 

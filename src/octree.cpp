@@ -42,9 +42,9 @@ uint64_t Octree::morton_code(int depth, double x, double y, double z)
     // generate integers in [0, 2^n) corresponding to x, y, and z and return
     // the Morton code corresponding to them
     double size = pow(2, depth);
-    uint32_t idx_x = floor(x / bound * size);
-    uint32_t idx_y = floor(y / bound * size);
-    uint32_t idx_z = floor(z / bound * size);
+    uint32_t idx_x = floor(x / p.bound * size);
+    uint32_t idx_y = floor(y / p.bound * size);
+    uint32_t idx_z = floor(z / p.bound * size);
     uint64_t answer = 0;
     // start by shifting the third byte, since we only look @ the first 21 bits
     if (depth > 16)
@@ -170,7 +170,7 @@ bool Octree::MNP_in_space(MNP_info *mnp, double x, double y, double z, double g)
     double dx = x + g/2 - mnp->x;
     double dy = y + g/2 - mnp->y;
     double dz = z + g/2 - mnp->z;
-    return NORMSQ(dx, dy, dz) < pow(g/2*sqrt(3) + scale * cell_r, 2);
+    return NORMSQ(dx, dy, dz) < pow(g/2*sqrt(3) + p.scale * p.cell_r, 2);
 }
 
 /**
@@ -238,7 +238,7 @@ double Octree::grad(double x, double y, double z, double g)
 
         // Don't add a gradient contribution from this cell if we are
         // within a scale multiple of the cell radius 
-        if (NORMSQ(dx, dy, dz) > pow(scale * cell_r, 2)) {
+        if (NORMSQ(dx, dy, dz) > pow(p.scale * p.cell_r, 2)) {
             // Factor of 10^17 inserted by HD. See magnetic field calculation
             // comment for rationale
             double divisor = pow(NORMSQ(dx, dy, dz), 3.5);
@@ -344,9 +344,9 @@ void Octree::build_subtree(std::vector<oct_node> *curr, double max_prod,\
 void Octree::init_subtrees(int tid, double max_prod, double min_g)
 {
     int arr_size = (int)pow(8, min_depth);
-    for (int offset = tid; offset < arr_size; offset += num_threads)
+    for (int offset = tid; offset < arr_size; offset += p.num_threads)
     {
-        double x = 0, y = 0, z = 0, g = bound;
+        double x = 0, y = 0, z = 0, g = p.bound;
         int temp = offset;
 
         // find (x, y, z) & g for the root of the subtree @ space[offset]
@@ -397,8 +397,8 @@ Octree::Octree(double max_prod, double max_g, double min_g, XORShift<> &gen,\
 #endif
 
     // Initialize the array of vectors (hashtable part of the tree)
-    this->min_depth = ceil(log(bound / max_g) / log(2));
-    this->max_depth = ceil(log(bound / min_g) / log(2));
+    this->min_depth = ceil(log(p.bound / max_g) / log(2));
+    this->max_depth = ceil(log(p.bound / min_g) / log(2));
     int arr_size = (int)pow(8, min_depth);
     this->space = new std::vector<oct_node>[arr_size];
     std::cout << "After applying boundary conditions, there are ";
@@ -408,7 +408,7 @@ Octree::Octree(double max_prod, double max_g, double min_g, XORShift<> &gen,\
 
     // Initialize the vectorized subtrees corresponding to each hashtable entry
     std::vector<std::thread> threads;
-    for (int i = 0; i < num_threads; i++)
+    for (int i = 0; i < p.num_threads; i++)
         threads.emplace_back(&Octree::init_subtrees, this, i, max_prod, min_g);
     for (auto &t : threads)
         t.join();

@@ -49,7 +49,7 @@ public:
  */
 class SimulationBox {
 public:
-    SimulationBox(int num_cells, int num_waters, XORShift<> *gen);
+    SimulationBox(XORShift<> *gen);
     virtual ~SimulationBox();
 
     void populateSimulation();
@@ -70,8 +70,6 @@ protected:
     XORShift<> *gen;
 
     bool populated; 
-    int num_cells;
-    int num_waters;
     int num_intra_mnps;
 
     Octree*             tree;
