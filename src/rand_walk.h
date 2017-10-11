@@ -1,6 +1,7 @@
 /**
  * @author  Aadyot Bhatnagar
- * @date    June 21, 2016
+ * @author  Vivek Bharadwaj
+ * @date    September 23, 2017
  * @file    rand_walk.h
  * @brief   Contains information about a water molecule and some of the basic
  *          operations that may be performed on it.
@@ -66,9 +67,5 @@ typedef struct MNP_info
 
     MNP_info() {};
 } MNP_info;
-
-water_info rand_displacement(double d, XORShift<> &gen);
-void unbounded_diffusion(water_info *molec, int steps, int num, double L,\
-        XORShift<> &gen);
 
 #endif /* RAND_WALK_H */

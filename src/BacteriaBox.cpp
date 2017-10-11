@@ -23,14 +23,12 @@ using namespace std;
  * constructor. populateSimulation() must be called after construction
  * to populate the box with its components.
  * 
- * @param num_cells     The number of cells in the simulation box
- * @param num_waters    The number of waters in the simulation box
  * @param gen           A pointer to the XORShift random number generator
  *                      used to initialize the MNPs and waters
  */
-BacteriaBox::BacteriaBox(int num_cells, int num_waters, XORShift<> *gen)
+BacteriaBox::BacteriaBox(XORShift<> *gen)
     :
-    SimulationBox(num_cells, num_waters, gen)
+    SimulationBox(gen)
 {
     // Only action: the superclass constructor is called with an single
     // magnetic dipole for each cell
@@ -49,14 +47,14 @@ BacteriaBox::~BacteriaBox() {
  * bound. If cells do overlap, they are simply re-thrown.
  */
 void BacteriaBox::init_cells() {
-    for(int i = 0; i < num_cells; i++) {
+    for(int i = 0; i < p.num_cells; i++) {
         bool invalid = true;
         double x, y, z;
         while(invalid) {
             invalid = false;
-            x = cell_r + gen->rand_pos_double() * (bound - 2 * cell_r);
-            y = cell_r + gen->rand_pos_double() * (bound - 2 * cell_r);
-            z = cell_r + gen->rand_pos_double() * (bound - 2 * cell_r);
+            x = p.cell_r + gen->rand_pos_double() * (p.bound - 2 * p.cell_r);
+            y = p.cell_r + gen->rand_pos_double() * (p.bound - 2 * p.cell_r);
+            z = p.cell_r + gen->rand_pos_double() * (p.bound - 2 * p.cell_r);
 
             // Check against overlap with other cells
             for(int j = 0; j < i; j++) {
@@ -65,7 +63,7 @@ void BacteriaBox::init_cells() {
                 double dz = cells[j].z - z;
                 
                 // Use 4 * cell_r^2 because separation must be >= 2* cell_r
-                if(NORMSQ(dx, dy, dz) < 4 * cell_r * cell_r)
+                if(NORMSQ(dx, dy, dz) < 4 * p.cell_r * p.cell_r)
                     invalid = true;
             }
         }
@@ -82,16 +80,16 @@ void BacteriaBox::init_cells() {
 void BacteriaBox::init_waters() {
     water_info current;
 
-    double offset = (bound - water_start_bound) / 2.0;
-    for (int i = 0; i < num_waters; i++) { 
+    double offset = (p.bound - p.water_start_bound) / 2.0;
+    for (int i = 0; i < p.num_water; i++) { 
         bool invalid = true;
 
         // Re-throw the water molecule repeatedly until we get a valid one
         while(invalid) {
             invalid = false; 
-            current.x = offset + gen->rand_pos_double() * water_start_bound;
-            current.y = offset + gen->rand_pos_double() * water_start_bound;
-            current.z = offset + gen->rand_pos_double() * water_start_bound;
+            current.x = offset + gen->rand_pos_double() * p.water_start_bound;
+            current.y = offset + gen->rand_pos_double() * p.water_start_bound;
+            current.z = offset + gen->rand_pos_double() * p.water_start_bound;
 
 #ifdef AVOID_INTRACELLULAR_THROW
             // When the appropriate flag is defined, re-throw if inside a cell
@@ -114,9 +112,9 @@ void BacteriaBox::init_waters() {
  * inside cells.
  */
 void BacteriaBox::init_mnps() {
-    num_intra_mnps = num_cells;
-    for(int i = 0; i < num_cells; i++) {
+    num_intra_mnps = p.num_cells;
+    for(int i = 0; i < p.num_cells; i++) {
         mnps.emplace_back(cells[i].x, cells[i].y, cells[i].z, 0,
-            mmoment);
+            p.mmoment);
     } 
 }

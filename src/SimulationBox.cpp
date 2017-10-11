@@ -25,23 +25,16 @@ using namespace std;
  * actually initialize them - call populateSimulation() to actually populate
  * the simulation.
  *
- * @param num_cells     The number of cells in the simulation
- * @param num_waters    The number of waters in the simulation
  * @param rng           A pointer to the XORShift random number generator
  *                      to generate the waters, cells, and MNPs
  */
-SimulationBox::SimulationBox(int num_cells, int num_waters,
-    XORShift<> *rng) {
-
-    this->num_cells     = num_cells;
-    this->num_waters    = num_waters; 
-
+SimulationBox::SimulationBox(XORShift<> *rng) {
     gen = rng; 
 
     // Allocate memory for the lookup table
-    lookupTable = new int*[hashDim * hashDim * hashDim];
-    for(int i = 0; i < hashDim * hashDim * hashDim; i++) {
-        lookupTable[i] = new int[maxNeighbors]; 
+    lookupTable = new int*[p.hashDim * p.hashDim * p.hashDim];
+    for(int i = 0; i < p.hashDim * p.hashDim * p.hashDim; i++) {
+        lookupTable[i] = new int[p.maxNeighbors]; 
     }
 }
 
@@ -54,7 +47,7 @@ SimulationBox::~SimulationBox() {
         delete tree;  
 
     // Delete the lookup table
-    for(int i = 0; i < hashDim * hashDim * hashDim; i++) {
+    for(int i = 0; i < p.hashDim * p.hashDim * p.hashDim; i++) {
         delete[] (lookupTable[i]);
     }
     delete[] lookupTable;
@@ -136,17 +129,17 @@ bool compare(SortStruct &a, SortStruct &b) {
  * SortStruct array to the simulation box's array of water molecules.
  */
 void SimulationBox::sortWaters() {
-    SortStruct* objs = new SortStruct[num_waters];
+    SortStruct* objs = new SortStruct[p.num_water];
 
-    for(int i = 0; i < num_waters; i++) {
+    for(int i = 0; i < p.num_water; i++) {
         objs[i].w = waters[i];
         oct_node* voxel = tree->get_voxel(&(objs[i].w));
         objs[i].mc = voxel->mc; 
     }
 
-    sort(objs, objs + num_waters, compare);
+    sort(objs, objs + p.num_water, compare);
 
-    for(int i = 0; i < num_waters; i++) {
+    for(int i = 0; i < p.num_water; i++) {
         waters[i] = objs[i].w;
     }
 
@@ -167,12 +160,12 @@ void SimulationBox::sortWaters() {
 */
 int SimulationBox::checkLatticeContainment(double x, double y, double z) {
     int containCell = -1;
-    for(int i = 0; i < num_cells; i++) {
+    for(int i = 0; i < p.num_cells; i++) {
         double dx = x - cells[i].x;
         double dy = y - cells[i].y;
         double dz = z - cells[i].z;
 
-        if(NORMSQ(dx, dy, dz) < pow(cell_r, 2)) {
+        if(NORMSQ(dx, dy, dz) < pow(p.cell_r, 2)) {
             containCell = i;
         }
     }
@@ -195,15 +188,15 @@ int SimulationBox::checkLatticeContainment(double x, double y, double z) {
 bool SimulationBox::checkLatticeOverlap(double x, double y, double z, double r) {
     bool overlaps = false;
     
-    for(int i = 0; i < num_cells; i++) {
+    for(int i = 0; i < p.num_cells; i++) {
         double dx = x - cells[i].x;
         double dy = y - cells[i].y;
         double dz = z - cells[i].z;
 
         double sqDist = NORMSQ(dx, dy, dz);
 
-        if (sqDist < pow(cell_r + r, 2)
-            && sqDist > pow((cell_r - r), 2)) {
+        if (sqDist < pow(p.cell_r + r, 2)
+            && sqDist > pow((p.cell_r - r), 2)) {
             overlaps = true;
         }
     }
@@ -230,14 +223,14 @@ void SimulationBox::print_simulation_stats() {
             << endl;
     }
 
-    fout << "Number of Waters, " << num_water << endl;
+    fout << "Number of Waters, " << p.num_water << endl;
     for(auto it = waters.begin(); it < waters.end(); it++) {
         fout << (*it).x << "," << (*it).y << "," << (*it).z << endl;
     }
 
-    fout << "Number of Cells, " << num_cells << endl;
+    fout << "Number of Cells, " << p.num_cells << endl;
     for(auto it = cells.begin(); it < cells.end(); it++) {
-        fout << (*it).x << "," << (*it).y << "," << (*it).z << "," << cell_r 
+        fout << (*it).x << "," << (*it).y << "," << (*it).z << "," << p.cell_r 
             << endl;
     }
     fout.close();
@@ -267,27 +260,27 @@ void SimulationBox::print_simulation_stats() {
  * for lattice pt. are filled with the sentinel value -1.
  */
 void SimulationBox::init_lookuptable() {
-    double cubeLength = bound / hashDim;
+    double cubeLength = p.bound / p.hashDim;
     double diagonal = sqrt(3) * cubeLength;
 
-    for(int i = 0; i < hashDim * hashDim * hashDim; i++) {
+    for(int i = 0; i < p.hashDim * p.hashDim * p.hashDim; i++) {
         vector<int> ncells;
-        double x = (i % hashDim) * cubeLength;
-        double y = ((i / hashDim) % (hashDim)) * cubeLength;
-        double z = i / (hashDim * hashDim) * cubeLength;
+        double x = (i % p.hashDim) * cubeLength;
+        double y = ((i / p.hashDim) % (p.hashDim)) * cubeLength;
+        double z = i / (p.hashDim * p.hashDim) * cubeLength;
 
-        for(int j = 0; j < num_cells; j++) {
+        for(int j = 0; j < p.num_cells; j++) {
             double dx = x - cells[j].x;
             double dy = y - cells[j].y;
             double dz = z - cells[j].z;
-            if(sqrt(NORMSQ(dx, dy, dz)) < cell_r + diagonal) {
+            if(sqrt(NORMSQ(dx, dy, dz)) < p.cell_r + diagonal) {
                 ncells.push_back(j);
             }
         }
 
-        assert(ncells.size() < maxNeighbors);
+        assert(ncells.size() < p.maxNeighbors);
 
-        for(int j = 0; j < maxNeighbors; j++) {
+        for(int j = 0; j < p.maxNeighbors; j++) {
             if(j < ncells.size())
                 lookupTable[i][j] = ncells[j];
             else
@@ -311,46 +304,46 @@ void SimulationBox::apply_bcs_on_mnps()
         double x = np->x, y = np->y, z = np->z, r = np->r, M = np->M;
 
         // boundaries touching faces
-        mnps.emplace_back(x - bound, y, z, r, M);
-        mnps.emplace_back(x - bound, y, z, r, M);
-        mnps.emplace_back(x, y - bound, z, r, M);
-        mnps.emplace_back(x, y + bound, z, r, M);
-        mnps.emplace_back(x, y, z - bound, r, M);
-        mnps.emplace_back(x, y, z + bound, r, M);
+        mnps.emplace_back(x - p.bound, y, z, r, M);
+        mnps.emplace_back(x - p.bound, y, z, r, M);
+        mnps.emplace_back(x, y - p.bound, z, r, M);
+        mnps.emplace_back(x, y + p.bound, z, r, M);
+        mnps.emplace_back(x, y, z - p.bound, r, M);
+        mnps.emplace_back(x, y, z + p.bound, r, M);
 
         // boundaries touching edges
-        mnps.emplace_back(x, y - bound, z - bound, r, M);
-        mnps.emplace_back(x, y - bound, z + bound, r, M);
-        mnps.emplace_back(x, y + bound, z - bound, r, M);
-        mnps.emplace_back(x, y + bound, z + bound, r, M);
+        mnps.emplace_back(x, y - p.bound, z - p.bound, r, M);
+        mnps.emplace_back(x, y - p.bound, z + p.bound, r, M);
+        mnps.emplace_back(x, y + p.bound, z - p.bound, r, M);
+        mnps.emplace_back(x, y + p.bound, z + p.bound, r, M);
 
-        mnps.emplace_back(x - bound, y, z - bound, r, M);
-        mnps.emplace_back(x - bound, y, z + bound, r, M);
-        mnps.emplace_back(x + bound, y, z - bound, r, M);
-        mnps.emplace_back(x + bound, y, z + bound, r, M);
+        mnps.emplace_back(x - p.bound, y, z - p.bound, r, M);
+        mnps.emplace_back(x - p.bound, y, z + p.bound, r, M);
+        mnps.emplace_back(x + p.bound, y, z - p.bound, r, M);
+        mnps.emplace_back(x + p.bound, y, z + p.bound, r, M);
 
-        mnps.emplace_back(x - bound, y - bound, z, r, M);
-        mnps.emplace_back(x - bound, y + bound, z, r, M);
-        mnps.emplace_back(x + bound, y - bound, z, r, M);
-        mnps.emplace_back(x + bound, y + bound, z, r, M);
+        mnps.emplace_back(x - p.bound, y - p.bound, z, r, M);
+        mnps.emplace_back(x - p.bound, y + p.bound, z, r, M);
+        mnps.emplace_back(x + p.bound, y - p.bound, z, r, M);
+        mnps.emplace_back(x + p.bound, y + p.bound, z, r, M);
 
         // boundaries touching corners
-        mnps.emplace_back(x - bound, y - bound, z - bound, r, M);
-        mnps.emplace_back(x - bound, y - bound, z + bound, r, M);
-        mnps.emplace_back(x - bound, y + bound, z - bound, r, M);
-        mnps.emplace_back(x - bound, y + bound, z + bound, r, M);
-        mnps.emplace_back(x + bound, y - bound, z - bound, r, M);
-        mnps.emplace_back(x + bound, y - bound, z + bound, r, M);
-        mnps.emplace_back(x + bound, y + bound, z - bound, r, M);
-        mnps.emplace_back(x + bound, y + bound, z + bound, r, M);
+        mnps.emplace_back(x - p.bound, y - p.bound, z - p.bound, r, M);
+        mnps.emplace_back(x - p.bound, y - p.bound, z + p.bound, r, M);
+        mnps.emplace_back(x - p.bound, y + p.bound, z - p.bound, r, M);
+        mnps.emplace_back(x - p.bound, y + p.bound, z + p.bound, r, M);
+        mnps.emplace_back(x + p.bound, y - p.bound, z - p.bound, r, M);
+        mnps.emplace_back(x + p.bound, y - p.bound, z + p.bound, r, M);
+        mnps.emplace_back(x + p.bound, y + p.bound, z - p.bound, r, M);
+        mnps.emplace_back(x + p.bound, y + p.bound, z + p.bound, r, M);
     }
 }
 
 #else
 /*
  * Of the nanoparticles initially initialized, if some are within a pre-set
- * range of the border of the space being simulated, those nanoparticles will
- * be duplicated across the appropriate periodic boundaries.
+ * range of the p.border of the space being simulated, those nanoparticles will
+ * be duplicated across the appropriate periodic p.boundaries.
  */
 void SimulationBox::apply_bcs_on_mnps()
 {
@@ -360,174 +353,174 @@ void SimulationBox::apply_bcs_on_mnps()
         MNP_info *np = mnps.data() + i;
         double x = np->x, y = np->y, z = np->z, r = np->r, M = np->M;
 
-        if (x + border > bound) // near front side
+        if (x + p.border > p.bound) // near front side
         {
-            mnps.emplace_back(x - bound, y, z, r, M);
+            mnps.emplace_back(x - p.bound, y, z, r, M);
 
-            if (y + border > bound) // near front and right sides
+            if (y + p.border > p.bound) // near front and right sides
             {
-                mnps.emplace_back(x - bound, y - bound, z, r, M);
-                mnps.emplace_back(x, y - bound, z, r, M);
+                mnps.emplace_back(x - p.bound, y - p.bound, z, r, M);
+                mnps.emplace_back(x, y - p.bound, z, r, M);
 
-                if (z + border > bound) // near front, right, and top sides
+                if (z + p.border > p.bound) // near front, right, and top sides
                 {
-                    mnps.emplace_back(x - bound, y - bound, z - bound, r, M);
-                    mnps.emplace_back(x - bound, y, z - bound, r, M);
-                    mnps.emplace_back(x, y - bound, z - bound, r, M);
-                    mnps.emplace_back(x, y, z - bound, r, M);
+                    mnps.emplace_back(x - p.bound, y - p.bound, z - p.bound, r, M);
+                    mnps.emplace_back(x - p.bound, y, z - p.bound, r, M);
+                    mnps.emplace_back(x, y - p.bound, z - p.bound, r, M);
+                    mnps.emplace_back(x, y, z - p.bound, r, M);
                 }
 
-                else if (z - border < 0) // near front, right, and bottom sides
+                else if (z - p.border < 0) // near front, right, and bottom sides
                 {
-                    mnps.emplace_back(x - bound, y - bound, z + bound, r, M);
-                    mnps.emplace_back(x - bound, y, z + bound, r, M);
-                    mnps.emplace_back(x, y - bound, z + bound, r, M);
-                    mnps.emplace_back(x, y, z + bound, r, M);
+                    mnps.emplace_back(x - p.bound, y - p.bound, z + p.bound, r, M);
+                    mnps.emplace_back(x - p.bound, y, z + p.bound, r, M);
+                    mnps.emplace_back(x, y - p.bound, z + p.bound, r, M);
+                    mnps.emplace_back(x, y, z + p.bound, r, M);
                 }
             }
 
-            else if (y - border < 0) // near front and left sides
+            else if (y - p.border < 0) // near front and left sides
             {
-                mnps.emplace_back(x - bound, y + bound, z, r, M);
-                mnps.emplace_back(x, y + bound, z, r, M);
+                mnps.emplace_back(x - p.bound, y + p.bound, z, r, M);
+                mnps.emplace_back(x, y + p.bound, z, r, M);
 
-                if (z + border > bound) // near front, left, and top sides
+                if (z + p.border > p.bound) // near front, left, and top sides
                 {
-                    mnps.emplace_back(x - bound, y + bound, z - bound, r, M);
-                    mnps.emplace_back(x - bound, y, z - bound, r, M);
-                    mnps.emplace_back(x, y + bound, z - bound, r, M);
-                    mnps.emplace_back(x, y, z - bound, r, M);
+                    mnps.emplace_back(x - p.bound, y + p.bound, z - p.bound, r, M);
+                    mnps.emplace_back(x - p.bound, y, z - p.bound, r, M);
+                    mnps.emplace_back(x, y + p.bound, z - p.bound, r, M);
+                    mnps.emplace_back(x, y, z - p.bound, r, M);
                 }
 
-                else if (z - border < 0) // near front, left, and bottom sides
+                else if (z - p.border < 0) // near front, left, and bottom sides
                 {
-                    mnps.emplace_back(x - bound, y + bound, z + bound, r, M);
-                    mnps.emplace_back(x - bound, y, z + bound, r, M);
-                    mnps.emplace_back(x, y + bound, z + bound, r, M);
-                    mnps.emplace_back(x, y, z + bound, r, M);
+                    mnps.emplace_back(x - p.bound, y + p.bound, z + p.bound, r, M);
+                    mnps.emplace_back(x - p.bound, y, z + p.bound, r, M);
+                    mnps.emplace_back(x, y + p.bound, z + p.bound, r, M);
+                    mnps.emplace_back(x, y, z + p.bound, r, M);
                 }
             }
 
             else // not near left or right sides, but near front side
             {
-                if (z + border > bound) // near front and top sides
+                if (z + p.border > p.bound) // near front and top sides
                 {
-                    mnps.emplace_back(x - bound, y, z - bound, r, M);
-                    mnps.emplace_back(x, y, z - bound, r, M);
+                    mnps.emplace_back(x - p.bound, y, z - p.bound, r, M);
+                    mnps.emplace_back(x, y, z - p.bound, r, M);
                 }
-                else if (z - border < 0) // near front and bottom sides
+                else if (z - p.border < 0) // near front and bottom sides
                 {
-                    mnps.emplace_back(x - bound, y, z + bound, r, M);
-                    mnps.emplace_back(x, y, z + bound, r, M);
+                    mnps.emplace_back(x - p.bound, y, z + p.bound, r, M);
+                    mnps.emplace_back(x, y, z + p.bound, r, M);
                 }
             }
         }
 
-        else if (x - border < 0) // near back side
+        else if (x - p.border < 0) // near back side
         {
-            mnps.emplace_back(x + bound, y, z, r, M);
+            mnps.emplace_back(x + p.bound, y, z, r, M);
 
-            if (y + border > bound) // near back and right sides
+            if (y + p.border > p.bound) // near back and right sides
             {
-                mnps.emplace_back(x + bound, y - bound, z, r, M);
-                mnps.emplace_back(x, y - bound, z, r, M);
+                mnps.emplace_back(x + p.bound, y - p.bound, z, r, M);
+                mnps.emplace_back(x, y - p.bound, z, r, M);
 
-                if (z + border > bound) // near back, right, and top sides
+                if (z + p.border > p.bound) // near back, right, and top sides
                 {
-                    mnps.emplace_back(x + bound, y - bound, z - bound, r, M);
-                    mnps.emplace_back(x + bound, y, z - bound, r, M);
-                    mnps.emplace_back(x, y - bound, z - bound, r, M);
-                    mnps.emplace_back(x, y, z - bound, r, M);
+                    mnps.emplace_back(x + p.bound, y - p.bound, z - p.bound, r, M);
+                    mnps.emplace_back(x + p.bound, y, z - p.bound, r, M);
+                    mnps.emplace_back(x, y - p.bound, z - p.bound, r, M);
+                    mnps.emplace_back(x, y, z - p.bound, r, M);
                 }
 
-                else if (z - border < 0) // near back, right, and bottom sides
+                else if (z - p.border < 0) // near back, right, and bottom sides
                 {
-                    mnps.emplace_back(x + bound, y - bound, z + bound, r, M);
-                    mnps.emplace_back(x + bound, y, z + bound, r, M);
-                    mnps.emplace_back(x, y - bound, z + bound, r, M);
-                    mnps.emplace_back(x, y, z + bound, r, M);
+                    mnps.emplace_back(x + p.bound, y - p.bound, z + p.bound, r, M);
+                    mnps.emplace_back(x + p.bound, y, z + p.bound, r, M);
+                    mnps.emplace_back(x, y - p.bound, z + p.bound, r, M);
+                    mnps.emplace_back(x, y, z + p.bound, r, M);
                 }
             }
 
-            else if (y - border < 0) // near back and left sides
+            else if (y - p.border < 0) // near back and left sides
             {
-                mnps.emplace_back(x + bound, y + bound, z, r, M);
-                mnps.emplace_back(x, y + bound, z, r, M);
+                mnps.emplace_back(x + p.bound, y + p.bound, z, r, M);
+                mnps.emplace_back(x, y + p.bound, z, r, M);
 
-                if (z + border > bound) // near back, left, and top sides
+                if (z + p.border > p.bound) // near back, left, and top sides
                 {
-                    mnps.emplace_back(x + bound, y + bound, z - bound, r, M);
-                    mnps.emplace_back(x + bound, y, z - bound, r, M);
-                    mnps.emplace_back(x, y + bound, z - bound, r, M);
-                    mnps.emplace_back(x, y, z - bound, r, M);
+                    mnps.emplace_back(x + p.bound, y + p.bound, z - p.bound, r, M);
+                    mnps.emplace_back(x + p.bound, y, z - p.bound, r, M);
+                    mnps.emplace_back(x, y + p.bound, z - p.bound, r, M);
+                    mnps.emplace_back(x, y, z - p.bound, r, M);
                 }
 
-                else if (z - border < 0) // near back, left, and bottom sides
+                else if (z - p.border < 0) // near back, left, and bottom sides
                 {
-                    mnps.emplace_back(x + bound, y + bound, z + bound, r, M);
-                    mnps.emplace_back(x + bound, y, z + bound, r, M);
-                    mnps.emplace_back(x, y + bound, z + bound, r, M);
-                    mnps.emplace_back(x, y, z + bound, r, M);
+                    mnps.emplace_back(x + p.bound, y + p.bound, z + p.bound, r, M);
+                    mnps.emplace_back(x + p.bound, y, z + p.bound, r, M);
+                    mnps.emplace_back(x, y + p.bound, z + p.bound, r, M);
+                    mnps.emplace_back(x, y, z + p.bound, r, M);
                 }
             }
 
             else // not near left or right sides, but near back side
             {
-                if (z + border > bound) // near back and top sides
+                if (z + p.border > p.bound) // near back and top sides
                 {
-                    mnps.emplace_back(x + bound, y, z - bound, r, M);
-                    mnps.emplace_back(x, y, z - bound, r, M);
+                    mnps.emplace_back(x + p.bound, y, z - p.bound, r, M);
+                    mnps.emplace_back(x, y, z - p.bound, r, M);
                 }
-                else if (z - border < 0) // near back and bottom sides
+                else if (z - p.border < 0) // near back and bottom sides
                 {
-                    mnps.emplace_back(x + bound, y, z + bound, r, M);
-                    mnps.emplace_back(x, y, z + bound, r, M);
+                    mnps.emplace_back(x + p.bound, y, z + p.bound, r, M);
+                    mnps.emplace_back(x, y, z + p.bound, r, M);
                 }
             }
         }
 
         else // not near back or front sides
         {
-            if (y + border > bound) // near right side
+            if (y + p.border > p.bound) // near right side
             {
-                mnps.emplace_back(x, y - bound, z, r, M);
+                mnps.emplace_back(x, y - p.bound, z, r, M);
 
-                if (z + border > bound) // near top and right sides
+                if (z + p.border > p.bound) // near top and right sides
                 {
-                    mnps.emplace_back(x, y - bound, z - bound, r, M);
-                    mnps.emplace_back(x, y, z - bound, r, M);
+                    mnps.emplace_back(x, y - p.bound, z - p.bound, r, M);
+                    mnps.emplace_back(x, y, z - p.bound, r, M);
                 }
 
-                else if (z - border < 0) // near bottom and right sides
+                else if (z - p.border < 0) // near bottom and right sides
                 {
-                    mnps.emplace_back(x, y - bound, z + bound, r, M);
-                    mnps.emplace_back(x, y, z + bound, r, M);
+                    mnps.emplace_back(x, y - p.bound, z + p.bound, r, M);
+                    mnps.emplace_back(x, y, z + p.bound, r, M);
                 }
             }
 
-            else if (y - border < 0) // near left side
+            else if (y - p.border < 0) // near left side
             {
-                mnps.emplace_back(x, y + bound, z, r, M);
+                mnps.emplace_back(x, y + p.bound, z, r, M);
 
-                if (z + border > bound) // near top and left sides
+                if (z + p.border > p.bound) // near top and left sides
                 {
-                    mnps.emplace_back(x, y + bound, z - bound, r, M);
-                    mnps.emplace_back(x, y, z - bound, r, M);
+                    mnps.emplace_back(x, y + p.bound, z - p.bound, r, M);
+                    mnps.emplace_back(x, y, z - p.bound, r, M);
                 }
 
-                else if (z - border < 0) // near bottom and left sides
+                else if (z - p.border < 0) // near bottom and left sides
                 {
-                    mnps.emplace_back(x, y + bound, z + bound, r, M);
-                    mnps.emplace_back(x, y, z + bound, r, M);
+                    mnps.emplace_back(x, y + p.bound, z + p.bound, r, M);
+                    mnps.emplace_back(x, y, z + p.bound, r, M);
                 }
             }
 
             else // not near left, right, front, or back sides
             {
-                if (z + border > bound) // near top side
-                    mnps.emplace_back(x, y, z - bound, r, M);
-                else if (z - border < 0) // near bottom side
-                    mnps.emplace_back(x, y, z + bound, r, M);
+                if (z + p.border > p.bound) // near top side
+                    mnps.emplace_back(x, y, z - p.bound, r, M);
+                else if (z - p.border < 0) // near bottom side
+                    mnps.emplace_back(x, y, z + p.bound, r, M);
             }
         }
     }

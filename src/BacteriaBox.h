@@ -26,7 +26,7 @@
 class BacteriaBox: public SimulationBox 
 {
 public:
-    BacteriaBox(int num_cells, int num_waters, XORShift<> *gen);
+    BacteriaBox(XORShift<> *gen);
     
     virtual ~BacteriaBox();
      
