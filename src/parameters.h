@@ -45,24 +45,24 @@ const int sprintSteps = 20000; // Each kernel execution handles AT MOST this man
 const int num_water = 4032;             // number of waters in simulation
 
 /* Related to the cells in the simulation*/
-const int num_cells = 257;               // Number of randomly thrown cells
+const int num_cells = 270;               // Number of randomly thrown cells
 const double cell_r = .55;                // cell radius in microns
 
-const double mmoment = 4e-17;         // Magnetic moment for each cell
+const double mmoment = 3.5e-17;         // Magnetic moment for each cell
 
 // Exactly ONE of the two flags below must be set
 #define CONSTANT_KICK
 #undef RANDOM_KICK
 
 #ifdef CONSTANT_KICK 
-const double phase_k = 2*3.14*42*7*2.1e-3;             // Intracellular ph. kick is k * dt at each tstep
+const double phase_k = 2*3.14*42*12*5e-3;             // Intracellular ph. kick is k * dt at each tstep
 #elif defined RANDOM_KICK
-const double phase_stdev = 2*3.14*1.5*1e-3*42*7*50;         // St. dev. of intracellular phase accumulation
-const double phase_k = 5.25;             //Chemical shift in ppm
+const double phase_stdev = 2*3.14*1.5*1e-3*42*12*10e-3;         // St. dev. of intracellular phase accumulation
+const double phase_k = 5;             //Chemical shift in ppm
 #endif
 
 /* Related to the simulation bounds */
-const double bound = 20;                // full box is [0, bound]^3 (microns)
+const double bound = 30;                // full box is [0, bound]^3 (microns)
 
 /* All water molecules begin the simulation in a box with dimension
    water_start_bound^3 that is centered in the middle of the larger
@@ -73,7 +73,7 @@ const double water_start_bound = 10;
  * Define the flag below to force the simulation to avoid throwing water
  * molecules inside of cells initially. 
  */
-#undef AVOID_INTRACELLULAR_THROW
+#define AVOID_INTRACELLULAR_THROW
 
 /* Parameters related to the optimized nearest cell finder */
 const int hashDim = 20;
@@ -95,8 +95,8 @@ const double P_expr = 0.2;             // permeability in micron per ms
  */
 
 const double tau = 1e-6;
-const double reflectIO = 1 - sqrt(tau / (6*D_cell)) * 4 * P_expr;
-const double reflectOI = 1 - ((1 - reflectIO) * sqrt(D_cell/D_extra));
+const double reflectIO =0; //1 - sqrt(tau / (6*D_cell)) * 4 * P_expr;
+const double reflectOI =0; //1 - ((1 - reflectIO) * sqrt(D_cell/D_extra));
 
 /* Time scales and step sizes */        // tau defines time step in ms - currently must be power of 10
 const int totaltime = 40;               // total time to run for in ms - because of GPU architecture, this

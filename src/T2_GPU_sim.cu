@@ -42,7 +42,7 @@ std::string generate_base_filename()
     filename += std::to_string((unsigned)(border));
     filename += "um_";
 #endif
-
+    filename += "impermeablemultitrial";
     filename += std::to_string((unsigned)(time(NULL)));
     filename += ".csv";
     return filename;
