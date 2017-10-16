@@ -27,7 +27,7 @@ public:
     STCONST double g = 42.5781e6;             // gyromagnetic ratio in MHz/T
     
     #undef FULL_BOUNDARIES      // use full boundary conditions to calculate field?
-    STCONST double scale = 2;     // calculate B explicitly within scale*R of clusterj 
+    STCONST double scale = 7;     // calculate B explicitly within scale*R of clusterj 
 
     #ifndef FULL_BOUNDARIES     // otherwise, apply BC's at some cutoff distance
     STCONST double border = 6;    // boundary from box where we start applying BC's
