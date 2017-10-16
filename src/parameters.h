@@ -27,7 +27,7 @@ public:
     STCONST double g = 42.5781e6;             // gyromagnetic ratio in MHz/T
     
     #undef FULL_BOUNDARIES      // use full boundary conditions to calculate field?
-    STCONST double scale = 2;     // calculate B explicitly within scale*R of clusterj 
+    STCONST double scale = 7;     // calculate B explicitly within scale*R of clusterj 
 
     #ifndef FULL_BOUNDARIES     // otherwise, apply BC's at some cutoff distance
     STCONST double border = 6;    // boundary from box where we start applying BC's
@@ -46,14 +46,19 @@ public:
     STCONST int num_water = 4032;             // number of waters in simulation
 
     /* Related to the cells in the simulation*/
-    STCONST int num_cells = 270;               // Number of randomly thrown cells
-    STCONST double cell_r = .55;                // cell radius in microns
+    STCONST int num_cells = 172;               // Number of randomly thrown cells
+    STCONST double cell_r = 9;                // cell radius in microns
 
-    STCONST double mmoment = 3.5e-17;         // Magnetic moment for each cell
+    STCONST double mmoment = 3.5e-17;         // Magnetic moment for each cell	
 
     // Exactly ONE of the two flags below must be set
     #undef CONSTANT_KICK
-    #define RANDOM_KICK
+    #undef RANDOM_KICK
+
+	// Exactly ONE of the three flags below must be set
+	#define INTRACELLULAR
+	#undef	EXTRACELLULAR
+	#undef	INTRA_EXTRA
 
     #ifdef CONSTANT_KICK 
     STCONST double phase_k = 2*3.14*42*12*5e-3;             // Intracellular ph. kick is k * dt at each tstep
@@ -63,18 +68,18 @@ public:
     #endif
 
     /* Related to the simulation bounds */
-    STCONST double bound = 30;                // full box is [0, bound]^3 (microns)
+    STCONST double bound = 76.3675;                // full box is [0, bound]^3 (microns)
 
     /* All water molecules begin the simulation in a box with dimension
        water_start_bound^3 that is centered in the middle of the larger
        simulation box. Given in microns. */
-    STCONST double water_start_bound = 10;
+    STCONST double water_start_bound = bound;
 
     /**
      * Define the flag below to force the simulation to avoid throwing water
      * molecules inside of cells initially. 
      */
-    #define AVOID_INTRACELLULAR_THROW
+    #undef AVOID_INTRACELLULAR_THROW
 
     /* Parameters related to the optimized nearest cell finder */
     STCONST int hashDim = 20;
@@ -113,8 +118,8 @@ public:
      * To make cells impermeable, set both of these numbers to 1. To make cell boundaries nonexistant,
      * set both numbers to 0.   
      */
-        reflectIO = 0; // 1 - sqrt(tau / (6*D_cell)) * 4 * P_expr;
-        reflectOI = 0; // 1 - ((1 - reflectIO) * sqrt(D_cell/D_extra));
+        reflectIO = 1 - sqrt(tau / (6*D_cell)) * 4 * P_expr;
+        reflectOI = 1 - ((1 - reflectIO) * sqrt(D_cell/D_extra));
 
         // St. dev of displacements inside and outside cells 
         in_stdev = sqrt(M_PI * D_cell * tau);

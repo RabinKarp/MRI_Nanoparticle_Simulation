@@ -35,7 +35,7 @@ gpu_sim: $(OBJS) $(PARAMS)
 
 # Printing statistics about the simulation box
 sim_box_test: $(PARAMS)
-	g++ -std=c++11 octree.cpp SimulationBox.cpp BacteriaBox.cpp SimboxTest.cpp -o simstat.out
+	g++ -std=c++11 octree.cpp SimulationBox.cpp BacteriaBox.cpp FCCBox.cpp SimboxTest.cpp -o simstat.out
 
 clean:
 	rm -f *.o *.tmp *~ *.out *#

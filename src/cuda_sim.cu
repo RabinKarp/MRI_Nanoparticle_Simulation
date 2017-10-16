@@ -413,12 +413,12 @@ void initGPUParams() {
  * @param d     A reference to the GPUData class storing a pointer to the 
  *              nearest cell lookup table on the GPU
  */
-void destroyLookupDevice(GPUData &d) {
+void destroyLookupDevice(int** &lookupTable, int** &localLookup ) {
     for(int i = 0; i < p.hashDim * p.hashDim * p.hashDim; i++) {
-        cudaFree(d.localLookup[i]);
+        cudaFree(localLookup[i]);
     }
-    cudaFree(d.lookupTable);
-    delete[] d.localLookup;
+    cudaFree(lookupTable);
+    delete[] localLookup;
 }
 
 /**
@@ -428,7 +428,7 @@ void destroyLookupDevice(GPUData &d) {
  *              nearest cell lookup table to free from memory
  */
 void finalizeGPU(GPUData &d) {
-    destroyLookupDevice(d); 
+    destroyLookupDevice(d.lookupTable, d.localLookup); 
     destroyTree(d);
 }
 
@@ -838,7 +838,7 @@ __global__ void flipPhases(water_info* __restrict__ waters, int len) {
 }
 
 /**
- * Copies the nearest cell lookup table to the GPU, storing the device pointer
+ * Copies the nearest cell/ MNP lookup table, storing the device pointer
  * in the provided GPUData class.
  *
  * @param sourceTable   A pointer to the 2D array on the host pointing to
@@ -846,17 +846,17 @@ __global__ void flipPhases(water_info* __restrict__ waters, int len) {
  * @param d             A reference to the GPUData struct to store a pointer
  *                      to the GPU lookup table.
  */
-void cpyLookupDevice(int **sourceTable, GPUData &d) {
+void cpyLookupDevice(int **sourceTable, int** &lookupTable, int** &localLookup) {
     int h3 = p.hashDim * p.hashDim * p.hashDim;
-    d.localLookup = new int*[h3];
+    localLookup = new int*[h3];
 
     for(int i = 0; i < h3; i++) {
-        d.localLookup[i] = (int *) cudaAllocate(p.maxNeighbors * sizeof(int));
-        copyToDevice((void *) d.localLookup[i], (void *) sourceTable[i],
+        localLookup[i] = (int *) cudaAllocate(p.maxNeighbors * sizeof(int));
+        copyToDevice((void *) localLookup[i], (void *) sourceTable[i],
             p.maxNeighbors * sizeof(int));
     }
-    d.lookupTable = (int**) cudaAllocate(h3 * sizeof(int**));
-    copyToDevice((void *) d.lookupTable, d.localLookup,
+    lookupTable = (int**) cudaAllocate(h3 * sizeof(int**));
+    copyToDevice((void *) lookupTable, localLookup,
         h3 * sizeof(int*));
 }
 
@@ -961,8 +961,9 @@ void simulateWaters(std::string filename) {
     dev_waters.deviceUpload();
     dev_time.deviceUpload();
     ones.deviceUpload();
-    cpyLookupDevice(simBox.getLookupTable(), d);
-  
+    cpyLookupDevice(simBox.getLookupTable(), d.lookupTable, d.localLookup);
+    cpyLookupDevice(simBox.getMNPLookupTable(), d.mnpLookupTable, d.mnpLocalLookup);
+
     int num_phase_blocks = 40000; 
 
     cout << "Kernel prepped!" << endl;

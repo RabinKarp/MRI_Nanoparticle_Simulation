@@ -115,7 +115,7 @@ void BacteriaBox::init_mnps() {
     num_intra_mnps = p.num_cells;
     for(int i = 0; i < p.num_cells; i++) {
         double moment = p.mmoment;
-        mnps.emplace_back(cells[i].x, cells[i].y, cells[i].z, 0,
+        mnps.emplace_back(cells[i].x, cells[i].y, cells[i].z, p.cell_r,
             moment);
     } 
 }
