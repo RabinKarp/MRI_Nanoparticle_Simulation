@@ -58,7 +58,8 @@ public:
     Triple*     getCells();
     water_info* getWaters(); 
     MNP_info*   getMNPs();
-    int**       getLookupTable(); 
+    int**       getLookupTable();
+    int**       getMNPLookupTable();
     Octree*     getOctree();
 
     int         getMNPCount();
@@ -77,6 +78,7 @@ protected:
     vector<water_info>  waters;
     vector<Triple>      cells;
     int**               lookupTable;
+    int**               mnpLookupTable;
 
     bool checkLatticeOverlap(double x, double y, double z, double r);
     int checkLatticeContainment(double x, double y, double z);
@@ -86,7 +88,9 @@ private:
     virtual void init_mnps()        = 0;
     virtual void init_waters()      = 0;
     
-    void init_lookuptable(); 
+    void init_lookuptable();
+    void init_MNPlookuptable(); 
+
     void apply_bcs_on_mnps();
 
     void sortWaters();

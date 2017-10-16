@@ -129,15 +129,15 @@ bool compare(SortStruct &a, SortStruct &b) {
  * SortStruct array to the simulation box's array of water molecules.
  */
 void SimulationBox::sortWaters() {
-    SortStruct* objs = new SortStruct[p.num_water];
+    SortStruct* objs = new SortStruct[p.num_waters];
 
-    for(int i = 0; i < p.num_water; i++) {
+    for(int i = 0; i < p.num_waters; i++) {
         objs[i].w = waters[i];
         oct_node* voxel = tree->get_voxel(&(objs[i].w));
         objs[i].mc = voxel->mc; 
     }
 
-    sort(objs, objs + p.num_water, compare);
+    sort(objs, objs + p.num_waters, compare);
 
     for(int i = 0; i < p.num_water; i++) {
         waters[i] = objs[i].w;
@@ -160,7 +160,7 @@ void SimulationBox::sortWaters() {
 */
 int SimulationBox::checkLatticeContainment(double x, double y, double z) {
     int containCell = -1;
-    for(int i = 0; i < p.num_cells; i++) {
+    for(int i = 0; i < num_cells; i++) {
         double dx = x - cells[i].x;
         double dy = y - cells[i].y;
         double dz = z - cells[i].z;
@@ -188,7 +188,7 @@ int SimulationBox::checkLatticeContainment(double x, double y, double z) {
 bool SimulationBox::checkLatticeOverlap(double x, double y, double z, double r) {
     bool overlaps = false;
     
-    for(int i = 0; i < p.num_cells; i++) {
+    for(int i = 0; i < num_cells; i++) {
         double dx = x - cells[i].x;
         double dy = y - cells[i].y;
         double dz = z - cells[i].z;
@@ -228,7 +228,7 @@ void SimulationBox::print_simulation_stats() {
         fout << (*it).x << "," << (*it).y << "," << (*it).z << endl;
     }
 
-    fout << "Number of Cells, " << p.num_cells << endl;
+    fout << "Number of Cells, " << num_cells << endl;
     for(auto it = cells.begin(); it < cells.end(); it++) {
         fout << (*it).x << "," << (*it).y << "," << (*it).z << "," << p.cell_r 
             << endl;
@@ -252,7 +252,7 @@ void SimulationBox::print_simulation_stats() {
  * point provides a small (~10-13) list of candidates for cells the
  * water could be in, speeding up the computation.
  *
- * The lookup table is a 2D integer array of dimension hashDim * hashDim
+ * The lookup tables are  2D integer array of dimension hashDim * hashDim
  * * hashDim * hashDim by MAX_NEIGHBORS. In other words, each lattice
  * point keeps track of MAX_NEIGHBORS indices of possible nearest neighbors.
  * There will be fewer than MAX_NEIGHBORS cell indices within the
@@ -287,6 +287,40 @@ void SimulationBox::init_lookuptable() {
                 lookupTable[i][j] = -1;
         }
     }
+}
+
+void SimulationBox::init_MNPlookuptable() {
+    double cubeLength = p.bound / p.hashDim;
+    double diagonal = sqrt(3) * cubeLength;
+
+    for(int i = 0; i < p.hashDim * p.hashDim * p.hashDim; i++) {
+        vector<int> ncells;
+        double x = (i % p.hashDim) * cubeLength;
+        double y = ((i / p.hashDim) % (p.hashDim)) * cubeLength;
+        double z = i / (p.hashDim * p.hashDim) * cubeLength;
+
+        for(int j = 0; j < num_intra_mnps; j++) {
+            double dx = x - mnps[j].x;
+            double dy = y - mnps[j].y;
+            double dz = z - mnps[j].z;
+            if(sqrt(NORMSQ(dx, dy, dz)) < p.cell_r + diagonal) {
+                ncells.push_back(j);
+            }
+        }
+
+        assert(ncells.size() < p.maxNeighbors);
+
+        for(int j = 0; j < p.maxNeighbors; j++) {
+            if(j < ncells.size())
+                mnpLookupTable[i][j] = ncells[j];
+            else
+                mnpLookupTable[i][j] = -1;
+        }
+    }
+}
+
+int** SimulationBox::getMNPLookupTable() {
+    return mnpLookupTable;
 }
 
 

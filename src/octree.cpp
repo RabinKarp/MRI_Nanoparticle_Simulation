@@ -170,7 +170,7 @@ bool Octree::MNP_in_space(MNP_info *mnp, double x, double y, double z, double g)
     double dx = x + g/2 - mnp->x;
     double dy = y + g/2 - mnp->y;
     double dz = z + g/2 - mnp->z;
-    return NORMSQ(dx, dy, dz) < pow(g/2*sqrt(3) + p.scale * p.cell_r, 2);
+    return NORMSQ(dx, dy, dz) < pow(g/2*sqrt(3) + p.scale * mnp->r, 2);
 }
 
 /**

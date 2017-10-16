@@ -57,7 +57,11 @@ typedef struct GPUData {
     Triple* lattice; 
     int** __restrict__ lookupTable;
     int** __restrict__ localLookup;
-    int* time;
+
+	int** __restrict__ mnpLookupTable;
+	int** __restrict__ mnpLocalLookup;
+
+	int* time;
 
     // Related to the waters
     water_info* waters;
