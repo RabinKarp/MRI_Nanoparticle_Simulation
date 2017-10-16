@@ -41,6 +41,7 @@ public:
     // The variable below must be a multiple of the printing frequency
     STCONST int sprintSteps = 20000; // Each kernel execution handles AT MOST this many timesteps
 
+    STCONST double prob_labeled = 0.26;       // probability a given cell is labeled
 
     /* Molecule information; simulation performs at its peak when num_water is divisible by 64 */
     STCONST int num_water = 4032;             // number of waters in simulation
@@ -49,7 +50,9 @@ public:
     STCONST int num_cells = 172;               // Number of randomly thrown cells
     STCONST double cell_r = 9;                // cell radius in microns
 
-    STCONST double mmoment = 3.5e-17;         // Magnetic moment for each cell	
+    STCONST double mmoment = 1.7e-15;         // Magnetic moment for each cell	
+
+    STCONST double mnp_radius = 0.1;
 
     // Exactly ONE of the two flags below must be set
     #undef CONSTANT_KICK
@@ -93,7 +96,7 @@ public:
     STCONST double tau = 1e-6; // Units of Microseconds
     
     /* Time scales and step sizes */        // tau defines time step in ms - currently must be power of 10
-    STCONST int totaltime = 40;               // total time to run for in ms - because of GPU architecture, this
+    STCONST int totaltime = 1;               // total time to run for in ms - because of GPU architecture, this
                                             // is constrained to be a discrete integer
     STCONST int t = (int)(totaltime/tau);     // Total time steps
     STCONST double taucp = 5.5;               // Carr-Purcell time in ms - up to 3 decimal places of precision 

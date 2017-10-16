@@ -76,10 +76,16 @@ SimulationBox::~SimulationBox() {
  */
 void SimulationBox::populateSimulation() {
     init_cells();
-    init_mnps();
-    init_waters();
-    init_lookuptable();
+    cout << "Cells initialized!" << endl;
+    
+    init_mnps(); 
+    cout << "MNPs initialized!" << endl;
 
+    init_waters();
+    cout << "Waters initialized!" << endl;
+
+    init_lookuptable();
+    init_MNPlookuptable();
     apply_bcs_on_mnps(); 
 
     // Initialize the octree for fast field computation
@@ -129,15 +135,15 @@ bool compare(SortStruct &a, SortStruct &b) {
  * SortStruct array to the simulation box's array of water molecules.
  */
 void SimulationBox::sortWaters() {
-    SortStruct* objs = new SortStruct[p.num_waters];
+    SortStruct* objs = new SortStruct[p.num_water];
 
-    for(int i = 0; i < p.num_waters; i++) {
+    for(int i = 0; i < p.num_water; i++) {
         objs[i].w = waters[i];
         oct_node* voxel = tree->get_voxel(&(objs[i].w));
         objs[i].mc = voxel->mc; 
     }
 
-    sort(objs, objs + p.num_waters, compare);
+    sort(objs, objs + p.num_water, compare);
 
     for(int i = 0; i < p.num_water; i++) {
         waters[i] = objs[i].w;
@@ -160,7 +166,7 @@ void SimulationBox::sortWaters() {
 */
 int SimulationBox::checkLatticeContainment(double x, double y, double z) {
     int containCell = -1;
-    for(int i = 0; i < num_cells; i++) {
+    for(int i = 0; i < p.num_cells; i++) {
         double dx = x - cells[i].x;
         double dy = y - cells[i].y;
         double dz = z - cells[i].z;
@@ -188,7 +194,7 @@ int SimulationBox::checkLatticeContainment(double x, double y, double z) {
 bool SimulationBox::checkLatticeOverlap(double x, double y, double z, double r) {
     bool overlaps = false;
     
-    for(int i = 0; i < num_cells; i++) {
+    for(int i = 0; i < p.num_cells; i++) {
         double dx = x - cells[i].x;
         double dy = y - cells[i].y;
         double dz = z - cells[i].z;
@@ -228,7 +234,7 @@ void SimulationBox::print_simulation_stats() {
         fout << (*it).x << "," << (*it).y << "," << (*it).z << endl;
     }
 
-    fout << "Number of Cells, " << num_cells << endl;
+    fout << "Number of Cells, " << p.num_cells << endl;
     for(auto it = cells.begin(); it < cells.end(); it++) {
         fout << (*it).x << "," << (*it).y << "," << (*it).z << "," << p.cell_r 
             << endl;

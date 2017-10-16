@@ -140,7 +140,7 @@ void FCCBox::init_mnps() {
     //cells[6] = {0.3356e-11/3.33, 0.0617e-11/3.33, 0.1249e-11/3.33, 0.0197e-11/3.33};
    
 
-    std::uniform_real_distribution<> dist(1 - (1/prob_labeled), 1);
+    std::uniform_real_distribution<> dist(1 - (1/p.prob_labeled), 1);
     for (int i = 0; i < p.num_cells; i++)
     {
         double coin = dist(*gen);
@@ -205,7 +205,7 @@ void FCCBox::init_mnps() {
 #endif
 						// Check against overlap with other MNPs
                         std::vector<MNP_info>::iterator m, start = mnps.begin();
-                        for (m = start; m != mnps->end() && !invalid; m++)
+                        for (m = start; m != mnps.end() && !invalid; m++)
                         {
                             double dx = x - m->x;
                             double dy = y - m->y;
@@ -224,7 +224,7 @@ void FCCBox::init_mnps() {
                         if(checkLatticeContainment(x, y, z) != -1)
                             r += lipid_width;
 #endif
-                        mnps->emplace_back(x, y, z, r, M);
+                        mnps.emplace_back(x, y, z, r, M);
                     }
                 }
                 break; // cell occupied -- don't try to fill it w/ more MNPs

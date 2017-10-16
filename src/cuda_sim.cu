@@ -413,7 +413,7 @@ void initGPUParams() {
  * @param d     A reference to the GPUData class storing a pointer to the 
  *              nearest cell lookup table on the GPU
  */
-void destroyLookupDevice(int** &lookupTable, int** &localLookup ) {
+void destroyLookupDevice(int** __restrict__ &lookupTable, int** __restrict__ &localLookup ) {
     for(int i = 0; i < p.hashDim * p.hashDim * p.hashDim; i++) {
         cudaFree(localLookup[i]);
     }
@@ -846,7 +846,7 @@ __global__ void flipPhases(water_info* __restrict__ waters, int len) {
  * @param d             A reference to the GPUData struct to store a pointer
  *                      to the GPU lookup table.
  */
-void cpyLookupDevice(int **sourceTable, int** &lookupTable, int** &localLookup) {
+void cpyLookupDevice(int **sourceTable, int** __restrict__ &lookupTable, int** __restrict__ &localLookup) {
     int h3 = p.hashDim * p.hashDim * p.hashDim;
     localLookup = new int*[h3];
 
@@ -919,6 +919,8 @@ void simulateWaters(std::string filename) {
     // and populate it with those components
     BacteriaBox simBox(&gen);
     simBox.populateSimulation();
+
+    simBox.print_simulation_stats(); 
 
     // Initialize a structure containing data to be shuttled to the GPU
     GPUData d;
