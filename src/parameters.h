@@ -86,7 +86,7 @@ public:
 
     /* Parameters related to the optimized nearest cell finder */
     STCONST int hashDim = 20;
-    STCONST int maxNeighbors = 13;
+    STCONST int maxNeighbors = 18;
 
     /* Constants affecting diffusion */
     STCONST double D_cell = .5547;            // D in micron^2 per ms
@@ -96,7 +96,7 @@ public:
     STCONST double tau = 1e-6; // Units of Microseconds
     
     /* Time scales and step sizes */        // tau defines time step in ms - currently must be power of 10
-    STCONST int totaltime = 1;               // total time to run for in ms - because of GPU architecture, this
+    STCONST int totaltime = 40;               // total time to run for in ms - because of GPU architecture, this
                                             // is constrained to be a discrete integer
     STCONST int t = (int)(totaltime/tau);     // Total time steps
     STCONST double taucp = 5.5;               // Carr-Purcell time in ms - up to 3 decimal places of precision 

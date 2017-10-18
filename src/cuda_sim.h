@@ -58,6 +58,7 @@ typedef struct GPUData {
     int** __restrict__ lookupTable;
     int** __restrict__ localLookup;
 
+    MNP_info* mnps;
 	int** __restrict__ mnpLookupTable;
 	int** __restrict__ mnpLocalLookup;
 

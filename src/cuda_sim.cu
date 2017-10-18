@@ -33,6 +33,7 @@
 
 #include "parameters.h"
 #include "BacteriaBox.h"
+#include "FCCBox.h"
 #include "gpu_random.h"
 #include "octree.h"
 
@@ -429,6 +430,7 @@ void destroyLookupDevice(int** __restrict__ &lookupTable, int** __restrict__ &lo
  */
 void finalizeGPU(GPUData &d) {
     destroyLookupDevice(d.lookupTable, d.localLookup); 
+    destroyLookupDevice(d.mnpLookupTable, d.mnpLocalLookup); 
     destroyTree(d);
 }
 
@@ -484,6 +486,38 @@ inline __device__ void updateNearest(water_info *w, GPUData &d) {
     w->nearest = cIndex;
 }
 
+//
+
+inline __device__ void updateNearestMNP(water_info *w, GPUData &d) {
+    double cubeLength = params.bound / params.hashDim;
+    int x_idx = w->x / cubeLength;
+    int y_idx = w->y / cubeLength;
+    int z_idx = w->z / cubeLength;
+
+    // Get an array of candidate MNPs close to the lattice point
+    int* nearest =
+        d.mnpLookupTable[z_idx * params.hashDim * params.hashDim
+        + y_idx * params.hashDim
+        + x_idx];
+
+    // Some ridiculously high upper bound on the nearest distance
+   
+    // Cycle through candidates, determine water molecule residency
+    w->in_mnp = false;
+    while(*nearest != -1) {
+        double dx = d.mnps[*nearest].x - w->x;
+        double dy = d.mnps[*nearest].y - w->y;
+        double dz = d.mnps[*nearest].z - w->z;
+ 
+        if(NORMSQ(dx, dy, dz) < d.mnps[*nearest].r*d.mnps[*nearest].r) {
+            w->in_mnp = true;
+        }
+        nearest++;
+    }
+}
+
+
+
 /**
  * Returns true if a water molecule crosses the boundary of the cell closest to
  * it and reflects off the boundary instead of crossing it. Whether or not
@@ -506,41 +540,6 @@ inline __device__ bool cell_reflect(water_info *i, water_info *f,
     bool flip = (i->in_cell && (! f->in_cell) && coin < params.reflectIO)
                     || ((! i->in_cell) && f->in_cell && coin < params.reflectOI);
     return flip;
-}
-
-/**
- * Returns true if a water molecule bumps into an MNP within the provided
- * list and needs to be reflected back. The function relies on the
- * client to supply a list of candidate MNPs that the water molecule could
- * bump into; if the water molecule bumps into an MNP not specified
- * in the candidate list, this funciton will NOT record a reflection.
- *
- * @param w         The water molecule to check for reflection
- * @param mnp       A pointer to an array of MNP candidates to check for
- *                  bumping into
- * @param num_mnps  The number of candidate MNPs in the given array
- * @param d         A GPUData class containing relevant parameters
- *
- * @return true  If the water molecule bumps into one of the candidate MNPs
- *               and reflects off it,
- *         false Otherwise
- */
-inline __device__ bool mnp_reflect(water_info *w, MNP_info *mnp, 
-        int num_mnps, GPUData &d) {
-    
-    bool retValue = false;
-
-    for(int i = 0; i < num_mnps; i++) {
-        MNP_info* m = mnp + i;
-        double dx = m->x - w->x;
-        double dy = m->y - w->y;
-        double dz = m->z - w->z;
-
-        if(NORMSQ(dx, dy, dz) < (m->r * m->r))
-            retValue = true;
-    }
-
-    return retValue;
 }
 
 /**
@@ -693,6 +692,7 @@ __global__ void simulateDiffusion(GPUData d)  {
         // Copy water to local register 
         w = d.waters[tid];
         updateNearest(&w, d);
+        updateNearestMNP(&w, d);
 
         bool* inc_ptr = d.in_cell + tid;
 
@@ -714,10 +714,11 @@ __global__ void simulateDiffusion(GPUData d)  {
             w.z += disp.z;
             boundary_conditions(&w, d);
             updateNearest(&w, d);
+            updateNearestMNP(&w, d);
 
             // Check cell boundary / MNP reflection
 
-            if(cell_reflect(&init, &w, &r_nums, d)) {
+            if(cell_reflect(&init, &w, &r_nums, d) || w.in_mnp) {
                 w = init;
             }
 
@@ -917,7 +918,7 @@ void simulateWaters(std::string filename) {
 
     // Initialize a simulation box containing the waters, MNPs, and cells,
     // and populate it with those components
-    BacteriaBox simBox(&gen);
+    FCCBox simBox(&gen);
     simBox.populateSimulation();
 
     simBox.print_simulation_stats(); 
@@ -935,6 +936,7 @@ void simulateWaters(std::string filename) {
     // GPU memory allocations performed here
     p_array<water_info> dev_waters(p.num_water, simBox.getWaters(), d.waters);
     p_array<Triple> dev_lattice(p.num_cells, simBox.getCells(), d.lattice); 
+    p_array<MNP_info> dev_mnps(simBox.getMNPCount(), simBox.getMNPs(), d.mnps);
 
     // Partition out the uniform random numbers
     d_array<double> dev_uniform(totalUniform);
@@ -961,6 +963,7 @@ void simulateWaters(std::string filename) {
     // Memory uploads to GPU performed here
     dev_lattice.deviceUpload(); 
     dev_waters.deviceUpload();
+    dev_mnps.deviceUpload();
     dev_time.deviceUpload();
     ones.deviceUpload();
     cpyLookupDevice(simBox.getLookupTable(), d.lookupTable, d.localLookup);

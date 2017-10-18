@@ -53,7 +53,7 @@ void FCCBox::init_cells() {
             fcc[i][j] *= p.cell_r * sqrt(2); 
             fcc[i][j] += p.bound/2;
         }
-        cells.emplace_back(fcc[i][1], fcc[i][2], fcc[i][3]); 
+        cells.emplace_back(fcc[i][0], fcc[i][1], fcc[i][2]); 
     }             
 }
 

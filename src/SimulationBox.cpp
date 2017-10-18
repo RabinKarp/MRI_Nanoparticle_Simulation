@@ -36,6 +36,12 @@ SimulationBox::SimulationBox(XORShift<> *rng) {
     for(int i = 0; i < p.hashDim * p.hashDim * p.hashDim; i++) {
         lookupTable[i] = new int[p.maxNeighbors]; 
     }
+
+    mnpLookupTable = new int*[p.hashDim * p.hashDim * p.hashDim];
+    for(int i = 0; i < p.hashDim * p.hashDim * p.hashDim; i++) {
+        mnpLookupTable[i] = new int[p.maxNeighbors]; 
+    }
+    
 }
 
 /**
@@ -51,6 +57,12 @@ SimulationBox::~SimulationBox() {
         delete[] (lookupTable[i]);
     }
     delete[] lookupTable;
+
+    for(int i = 0; i < p.hashDim * p.hashDim * p.hashDim; i++) {
+        delete[] (mnpLookupTable[i]);
+    }
+    delete[] mnpLookupTable;
+
 }
 
 /**
@@ -75,14 +87,9 @@ SimulationBox::~SimulationBox() {
  *                the simulation components via the accessors.
  */
 void SimulationBox::populateSimulation() {
-    init_cells();
-    cout << "Cells initialized!" << endl;
-    
+    init_cells();    
     init_mnps(); 
-    cout << "MNPs initialized!" << endl;
-
     init_waters();
-    cout << "Waters initialized!" << endl;
 
     init_lookuptable();
     init_MNPlookuptable();
@@ -283,7 +290,7 @@ void SimulationBox::init_lookuptable() {
                 ncells.push_back(j);
             }
         }
-
+     
         assert(ncells.size() < p.maxNeighbors);
 
         for(int j = 0; j < p.maxNeighbors; j++) {

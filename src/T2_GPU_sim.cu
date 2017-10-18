@@ -11,11 +11,13 @@
 #include <fstream>
 #include <ctime>
 #include <string>
+#include <random>
 
 #include "cuda.h"
 
 #include "parameters.h"
 #include "cuda_sim.h"
+#include "FCCBox.h"
 
 using namespace std;
 

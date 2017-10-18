@@ -11,8 +11,8 @@
  *          center of the larger simulation bound cube.
  */
 
-#ifndef BACTERIA_BOX_H 
-#define BACTERIA_BOX_H 
+#ifndef FCC_BOX_H 
+#define FCC_BOX_H 
 
 #include "SimulationBox.h"
 
