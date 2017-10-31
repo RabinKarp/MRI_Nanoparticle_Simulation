@@ -21,6 +21,7 @@
 #undef DEBUG_TREE           // check water/node residency via assertions?
 #undef DEBUG_FIELD          // create output file w/ B_z at all leaf nodes?
 
+#define DEBUG_DIFFUSION      // create a file w/ norm-squred displacements of waters? 
 
 struct ParameterStruct {
 public:
@@ -39,7 +40,7 @@ public:
     #define threads_per_block 192 // Keep this as a multiple of 64
 
     // The variable below must be a multiple of the printing frequency
-    STCONST int sprintSteps = 20000; // Each kernel execution handles AT MOST this many timesteps
+    STCONST int sprintSteps = 10000; // Each kernel execution handles AT MOST this many timesteps
 
     STCONST double prob_labeled = 0.26;       // probability a given cell is labeled
 
@@ -86,14 +87,14 @@ public:
 
     /* Parameters related to the optimized nearest cell finder */
     STCONST int hashDim = 20;
-    STCONST int maxNeighbors = 18;
+    STCONST int maxNeighbors = 20;
 
     /* Constants affecting diffusion */
     STCONST double D_cell = .5547;            // D in micron^2 per ms
     STCONST double D_extra = 1.6642;          // D in micron^2 per ms
     STCONST double P_expr = 0.2;             // permeability in micron per ms
 
-    STCONST double tau = 1e-6; // Units of Microseconds
+    STCONST double tau = 1e-6; // Units of ms
     
     /* Time scales and step sizes */        // tau defines time step in ms - currently must be power of 10
     STCONST int totaltime = 40;               // total time to run for in ms - because of GPU architecture, this

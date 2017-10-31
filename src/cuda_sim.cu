@@ -975,6 +975,25 @@ void simulateWaters(std::string filename) {
     cout << "Starting GPU computation..." << endl;
     timer.cpuStart();
 
+    // Initialize a file to write squared displacements when this flag is set
+#ifdef DEBUG_DIFFUSION
+    ofstream diffout("displacements.csv");
+    
+    // Print table header
+    
+    diffout << "Time, "; 
+    for(int i = 0; i < p.num_water; i++) {
+        diffout << "Molecule " << i << ",,,,";
+    }
+
+    diffout << endl << ",";
+    for(int i = 0; i < p.num_water; i++) {
+        diffout << "X, Y, Z, In Cell?, "; 
+    }
+
+    diffout << endl;
+#endif
+
     // Run the kernel in sprints 
     int time = 0;
     for(int i = 0; i < (p.t / p.sprintSteps); i++) {
@@ -984,6 +1003,23 @@ void simulateWaters(std::string filename) {
 
         // Simulate water molecule diffusion without field computation 
         simulateDiffusion<<<num_blocks, threads_per_block>>>(d);
+
+        // When this flag is set, we download the positions of the water molecules
+        // at each timestep (along with whether or not a water is inside a cell)
+        // and print the 
+#ifdef DEBUG_DIFFUSION
+        dev_waters.deviceDownload();
+
+        diffout << ((p.tau) * (time + p.sprintSteps)); 
+        for(int j = 0; j < p.num_water; j++) {
+            diffout 
+                << dev_waters[j].x << ", "
+                << dev_waters[j].y << ", "
+                << dev_waters[j].z << ", "
+                << dev_waters[j].in_cell << ",";
+        }
+        diffout << endl;
+#endif
 
         // Compute the phase kick acquired by each water molecule at each location 
         computePhaseAccumulation<<<num_phase_blocks, threads_per_block>>>
@@ -1037,4 +1073,8 @@ void simulateWaters(std::string filename) {
     // Clean up all allocated resources on the GPU, close file handle
     finalizeGPU(d);
     fout.close();
+
+#ifdef DEBUG_DIFFUSION
+    diffout.close();
+#endif
 }
