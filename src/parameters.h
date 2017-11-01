@@ -16,13 +16,13 @@
 #define STCONST static const
 
 /* Switches for enabling or disabling debugging output files */
-#undef DEBUG_LATTICE        // create output file w/ cell centers and neighbors?
-#undef DEBUG_MNPS           // create output file w/ all MNP coordinates?
+#define DEBUG_LATTICE        // create output file w/ cell centers and neighbors?
+#define DEBUG_MNPS           // create output file w/ all MNP coordinates?
 #undef DEBUG_TREE           // check water/node residency via assertions?
 #undef DEBUG_FIELD          // create output file w/ B_z at all leaf nodes?
 
 #define DEBUG_DIFFUSION      // create a file w/ norm-squred displacements of waters? 
-
+#define UNCLUSTERED
 struct ParameterStruct {
 public:
     STCONST double g = 42.5781e6;             // gyromagnetic ratio in MHz/T
@@ -48,14 +48,17 @@ public:
     STCONST int num_water = 4032;             // number of waters in simulation
 
     /* Related to the cells in the simulation*/
-    STCONST int num_cells = 172;               // Number of randomly thrown cells
-    STCONST double cell_r = 9;                // cell radius in microns
+    STCONST int num_cells = 172;               // Number of cells if randomly thrown
 
-    STCONST double mmoment = 1.7e-15;         // Magnetic moment for each cell	
+    STCONST double cell_r = .55;                // cell radius in microns
+    STCONST int num_mnps=108*1000;
+    STCONST double mmoment = 1.7e-17;         // Magnetic moment for each dipole	
+    STCONST double mnp_radius = 0.02;         // Radius of magnetic material
 
-    STCONST double mnp_radius = 0.1;
-
-    // Exactly ONE of the two flags below must be set
+    //Exactly one of these two flags must be set
+    #define CalcIntra
+    #undef DefIntra
+    // At most ONE of the two flags below must be set
     #undef CONSTANT_KICK
     #undef RANDOM_KICK
 
@@ -72,7 +75,8 @@ public:
     #endif
 
     /* Related to the simulation bounds */
-    STCONST double bound = 76.3675;                // full box is [0, bound]^3 (microns)
+  STCONST double fcc_pack=2*1.58;
+  STCONST double bound = 6*1.4142*.55*2*1.58;                // full box is [0, bound]^3 (microns)
 
     /* All water molecules begin the simulation in a box with dimension
        water_start_bound^3 that is centered in the middle of the larger
@@ -90,9 +94,9 @@ public:
     STCONST int maxNeighbors = 20;
 
     /* Constants affecting diffusion */
-    STCONST double D_cell = .5547;            // D in micron^2 per ms
-    STCONST double D_extra = 1.6642;          // D in micron^2 per ms
-    STCONST double P_expr = 0.2;             // permeability in micron per ms
+    STCONST double D_cell = 1;            // D in micron^2 per ms
+    STCONST double D_extra = 3;          // D in micron^2 per ms
+    STCONST double P_expr = 1;             // permeability in micron per ms
 
     STCONST double tau = 1e-6; // Units of ms
     
@@ -100,7 +104,7 @@ public:
     STCONST int totaltime = 40;               // total time to run for in ms - because of GPU architecture, this
                                             // is constrained to be a discrete integer
     STCONST int t = (int)(totaltime/tau);     // Total time steps
-    STCONST double taucp = 5.5;               // Carr-Purcell time in ms - up to 3 decimal places of precision 
+    STCONST double taucp = .5;               // Carr-Purcell time in ms - up to 3 decimal places of precision 
     STCONST int tcp = (int)(taucp/tau);       // time steps per Carr-Purcell time
 
     

@@ -50,7 +50,7 @@ void FCCBox::init_cells() {
     {
         for (int j = 0; j < 3; j++)
         {
-            fcc[i][j] *= p.cell_r * sqrt(2); 
+            fcc[i][j] *= p.cell_r * sqrt(2)*p.fcc_pack; 
             fcc[i][j] += p.bound/2;
         }
         cells.emplace_back(fcc[i][0], fcc[i][1], fcc[i][2]); 
@@ -115,7 +115,80 @@ water_info FCCBox::rand_displacement(double d, XORShift<> *gen) {
     return w;
 }
 
+#ifdef UNCLUSTERED
+/*
+* Initializes the specified number of individaul, unclustered magnetic
+* nanoparticles all in extracellular space.
+*/
+void FCCBox::init_mnps() {
+{
+	std::vector<MNP_info> *mnps = new std::vector<MNP_info>;
+	for (int i = 0; i < p.num_mnps; i++)
+	{
+		double x, y, z;
+		bool invalid = true;
 
+		// keep generating (x,y,z) coordinates until we get an extracellular one
+		// that doesn't overlap with other nanoparticles
+		while (invalid)
+		{
+			x = gen->rand_pos_double() * p.bound;
+			y = gen->rand_pos_double() * p.bound;
+			z = gen->rand_pos_double() * p.bound;
+			invalid = false;
+
+			// re-throw if the nanoparticle is inside/outside a cell (depends on flag)
+			for (int j = 0; j < p.num_cells && !invalid; j++)
+			{
+				double dx = x - fcc[j][0];
+				double dy = y - fcc[j][1];
+				double dz = z - fcc[j][2];
+
+				// Check for invalid MNP's (overlapping with cell boundaries,
+				// not in desired intracellular or extracellular locations, and
+				// set a flag to rethrow if needed)
+#if defined EXTRACELLULAR
+				if (NORMSQ(dx, dy, dz) < pow(p.cell_r + p.mnp_radius, 2)) {
+					invalid = true;
+				}
+#elif defined INTRACELLULAR
+				if ((checkLatticeContainment(x, y, z) == -1) ||
+					checkLatticeOverlap(x, y, z, p.mnp_radius)) {
+					invalid = true;
+				}
+				// Just check for cell boundary overlap in this case
+#elif defined INTRA_EXTRA
+				if ((NORMSQ(dx, dy, dz) > pow(p.cell_r - p.mnp_radius, 2))
+					&& (NORMSQ(dx, dy, dz) < pow(p.cell_r + p.mnp_radius, 2)))
+					invalid = true;
+#endif
+			}
+
+			// re-throw if the nanoparticle overlaps with another nanoparticle
+			std::vector<MNP_info>::iterator curr;
+			for (curr = mnps->begin(); curr != mnps->end() && !invalid; curr++)
+			{
+				double dx = x - curr->x;
+				double dy = y - curr->y;
+				double dz = z - curr->z;
+				if (NORMSQ(dx, dy, dz) < pow(2 * p.mnp_radius, 2))
+					invalid = true;
+			}
+		}
+
+		// If the flag is set, factor in the new lipid envelope
+		double radius = p.mnp_radius;
+#ifdef LIPID_ENVELOPE
+		if (checkLatticeContainment(x, y, z) != -1)
+			radius += lipid_width;
+#endif
+		double mmoment = p.mmoment;
+		mnps->emplace_back(x, y, z, radius, mmoment);
+	}
+
+}
+/* endif UNCLUSTERED */
+#elif defined CLUSTERED
 /**
  * Initializes an MNP (really a dipole for the cell) at the center of each cell
  * with the specified magnetic moment and 0 radius. 0 radius implies that
@@ -174,9 +247,9 @@ void FCCBox::init_mnps() {
 #elif defined EXTRACELLULAR
 #ifdef THROW_FREE // Throw cluster anywhere in extracellular space - the check
                   // against cell containment occurs after the branch
-                        x = gen->rand_pos_double() * bound;
-                        y = gen->rand_pos_double() * bound;
-                        z = gen->rand_pos_double() * bound;
+                        x = gen->rand_pos_double() * p.bound;
+                        y = gen->rand_pos_double() * p.bound;
+                        z = gen->rand_pos_double() * p.bound;
 
 #else // Throw the particle within a certain vicinity of the labeled cell
                         double norm = p.cell_r * (1 + gen->rand_pos_double()
@@ -232,4 +305,6 @@ void FCCBox::init_mnps() {
         }
 	}
     num_intra_mnps = mnps.size();
-}
+
+#endif
+	}

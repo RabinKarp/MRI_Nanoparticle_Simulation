@@ -110,8 +110,12 @@ __device__ double dipole_field(double dx, double dy, double dz,
     
     double sqDist = NORMSQ(dx, dy, dz);
     double divisor = sqDist * sqDist * sqrt(sqDist);
+	#ifdef DefIntra
     return (sqDist > params.cell_r * params.cell_r) * M * 1e11 
         * (2*dz*dz - dx*dx - dy*dy) / divisor;
+	#elif defined CalcIntra
+	return M * 1e11 * (2*dz*dz - dx*dx - dy*dy) / divisor;
+	#endif 
 }
 
 /**
