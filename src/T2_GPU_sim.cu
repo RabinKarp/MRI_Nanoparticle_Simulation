@@ -27,14 +27,23 @@ using namespace std;
  *
  * @return filename The filename of the csv used to store the simulation output
  */
+
 std::string generate_base_filename()
 {
-    std::string filename("tau=");
-    filename += std::to_string((unsigned)(p.tau * 1e9));
-    filename += "ps_T-e=";
+    std::string filename("echo_");
+    filename += "T-e";
     filename += std::to_string((unsigned)(2*p.taucp));
-    filename += "largedipole";
-
+    filename += "_clusterradius_";
+    filename += std::to_string((double)(p.mnp_radius));
+    filename += "_mmoment_";
+    filename += std::to_string((double)(p.mmoment));
+    filename += "_numclusters_";
+    filename += std::to_string((int)(p.num_mnps));
+    filename += "_cellcount_";
+    filename += std::to_string((int)(p.num_cells));
+    filename += "_boundarymicrons_";
+    filename += std::to_string((double)(p.bound));
+    filename += "_";
 #ifdef EXPLICIT
     filename += "_ex_";
 #endif
@@ -44,7 +53,6 @@ std::string generate_base_filename()
     filename += std::to_string((unsigned)(p.border));
     filename += "um_";
 #endif
-    filename += "impermeablemultitrial";
     filename += std::to_string((unsigned)(time(NULL)));
     filename += ".csv";
     return filename;

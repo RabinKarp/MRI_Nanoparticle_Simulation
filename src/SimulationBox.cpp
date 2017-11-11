@@ -88,9 +88,11 @@ SimulationBox::~SimulationBox() {
  */
 void SimulationBox::populateSimulation() {
     init_cells();    
-    init_mnps(); 
-    init_waters();
+    init_mnps();
+    num_intra_mnps = mnps.size();
 
+    init_waters();
+    
     init_lookuptable();
     init_MNPlookuptable();
     apply_bcs_on_mnps(); 
@@ -316,7 +318,7 @@ void SimulationBox::init_MNPlookuptable() {
             double dx = x - mnps[j].x;
             double dy = y - mnps[j].y;
             double dz = z - mnps[j].z;
-            if(sqrt(NORMSQ(dx, dy, dz)) < p.cell_r + diagonal) {
+            if(sqrt(NORMSQ(dx, dy, dz)) < mnps[j].r + diagonal) {
                 ncells.push_back(j);
             }
         }

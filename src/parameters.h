@@ -48,11 +48,10 @@ public:
     STCONST int num_water = 4032;             // number of waters in simulation
 
     /* Related to the cells in the simulation*/
-    STCONST int num_cells = 172;               // Number of cells if randomly thrown
+    STCONST int num_cells = 172;               // Number of cells in the FCC lattice 
 
-    STCONST double cell_r = .55;                // cell radius in microns
-    STCONST int num_mnps=108*1000;
-    STCONST double mmoment = 1.7e-17;         // Magnetic moment for each dipole	
+    STCONST double cell_r = .55;                // cell radius in microns 
+    STCONST double mmoment = 2e-19;         // Magnetic moment for each dipole	
     STCONST double mnp_radius = 0.02;         // Radius of magnetic material
 
     //Exactly one of these two flags must be set
@@ -67,16 +66,20 @@ public:
 	#undef	EXTRACELLULAR
 	#undef	INTRA_EXTRA
 
+#ifdef UNCLUSTERED
+    STCONST int num_mnps = 60*108;       // Number of MNPs to throw in the unclustered case
+#endif 
+
     #ifdef CONSTANT_KICK 
-    STCONST double phase_k = 2*3.14*42*12*5e-3;             // Intracellular ph. kick is k * dt at each tstep
+    STCONST double phase_k = 2*3.14*42*12*5e-3;                // Intracellular ph. kick is k * dt at each tstep
     #elif defined RANDOM_KICK
-    STCONST double phase_stdev = 2*3.14*1.5*1e-3*42*12*10e-3;         // St. dev. of intracellular phase accumulation
-    STCONST double phase_k = 5;             //Chemical shift in ppm
+    STCONST double phase_stdev = 2*3.14*1.5*1e-3*42*12*10e-3;  // St. dev. of intracellular phase accumulation
+    STCONST double phase_k = 5;                                //Chemical shift in ppm
     #endif
 
     /* Related to the simulation bounds */
-  STCONST double fcc_pack=2*1.58;
-  STCONST double bound = 6*1.4142*.55*2*1.58;                // full box is [0, bound]^3 (microns)
+    STCONST double fcc_pack=1;
+    STCONST double bound = 11;                               //6*1.4142*.55*2*1.58;  // full box is [0, bound]^3 (microns)
 
     /* All water molecules begin the simulation in a box with dimension
        water_start_bound^3 that is centered in the middle of the larger
@@ -90,13 +93,13 @@ public:
     #undef AVOID_INTRACELLULAR_THROW
 
     /* Parameters related to the optimized nearest cell finder */
-    STCONST int hashDim = 20;
-    STCONST int maxNeighbors = 20;
+    STCONST int hashDim = 80;
+    STCONST int maxNeighbors = 150;
 
     /* Constants affecting diffusion */
     STCONST double D_cell = 1;            // D in micron^2 per ms
     STCONST double D_extra = 3;          // D in micron^2 per ms
-    STCONST double P_expr = 1;             // permeability in micron per ms
+    STCONST double P_expr = .2;             // permeability in micron per ms
 
     STCONST double tau = 1e-6; // Units of ms
     

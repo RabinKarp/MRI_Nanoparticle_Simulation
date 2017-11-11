@@ -121,8 +121,7 @@ water_info FCCBox::rand_displacement(double d, XORShift<> *gen) {
 * nanoparticles all in extracellular space.
 */
 void FCCBox::init_mnps() {
-{
-	std::vector<MNP_info> *mnps = new std::vector<MNP_info>;
+{	
 	for (int i = 0; i < p.num_mnps; i++)
 	{
 		double x, y, z;
@@ -166,7 +165,7 @@ void FCCBox::init_mnps() {
 
 			// re-throw if the nanoparticle overlaps with another nanoparticle
 			std::vector<MNP_info>::iterator curr;
-			for (curr = mnps->begin(); curr != mnps->end() && !invalid; curr++)
+			for (curr = mnps.begin(); curr != mnps.end() && !invalid; curr++)
 			{
 				double dx = x - curr->x;
 				double dy = y - curr->y;
@@ -183,7 +182,7 @@ void FCCBox::init_mnps() {
 			radius += lipid_width;
 #endif
 		double mmoment = p.mmoment;
-		mnps->emplace_back(x, y, z, radius, mmoment);
+		mnps.emplace_back(x, y, z, radius, mmoment);
 	}
 
 }
@@ -245,6 +244,12 @@ void FCCBox::init_mnps() {
                         y = loc.y + fcc[i][1];
                         z = loc.z + fcc[i][2];
 #elif defined EXTRACELLULAR
+ifdef INTRACELLULAR
+  double norm = gen->rand_pos_double() * (p.cell_r);
+ water_info loc = rand_displacement(norm, gen);
+ x = loc.x + fcc[i][0];
+ y = loc.y + fcc[i][1];
+ z = loc.z + fcc[i][2];
 #ifdef THROW_FREE // Throw cluster anywhere in extracellular space - the check
                   // against cell containment occurs after the branch
                         x = gen->rand_pos_double() * p.bound;
@@ -303,8 +308,7 @@ void FCCBox::init_mnps() {
                 break; // cell occupied -- don't try to fill it w/ more MNPs
             }
         }
-	}
-    num_intra_mnps = mnps.size();
+	} 
 
 #endif
 	}
