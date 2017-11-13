@@ -199,7 +199,9 @@ void FCCBox::init_mnps() {
 	/* Magnetic moments established by HD on NV adjusted using SQUID magneto-
      * metry for saturation magnetization. Each Cell is an array of the magnetic
      * moments of the enclosed nanoparticles.*/
-	
+
+    cout << "Applying the clustered throw model" << endl;
+
 	int CELL_TYPES = 6;
     std::vector<double> cells[CELL_TYPES];
     cells[0] = {5.35e-14/3.33, 1.688e-13/3.33};

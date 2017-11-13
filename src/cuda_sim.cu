@@ -490,8 +490,6 @@ inline __device__ void updateNearest(water_info *w, GPUData &d) {
     w->nearest = cIndex;
 }
 
-//
-
 inline __device__ void updateNearestMNP(water_info *w, GPUData &d) {
     double cubeLength = params.bound / params.hashDim;
     int x_idx = w->x / cubeLength;
@@ -838,7 +836,8 @@ __global__ void performUpdate(water_info* __restrict__ waters,
 __global__ void flipPhases(water_info* __restrict__ waters, int len) {
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
 
-    if(tid < len)
+    if(tid < len) // Check that the thread index is actually in the range
+                  // of the number of molecules
         waters[tid].phase *= -1; 
 }
 
@@ -851,7 +850,8 @@ __global__ void flipPhases(water_info* __restrict__ waters, int len) {
  * @param d             A reference to the GPUData struct to store a pointer
  *                      to the GPU lookup table.
  */
-void cpyLookupDevice(int **sourceTable, int** __restrict__ &lookupTable, int** __restrict__ &localLookup) {
+void cpyLookupDevice(int **sourceTable, int** __restrict__ &lookupTable, 
+        int** __restrict__ &localLookup) {
     int h3 = p.hashDim * p.hashDim * p.hashDim;
     localLookup = new int*[h3];
 
@@ -925,6 +925,7 @@ void simulateWaters(std::string filename) {
     FCCBox simBox(&gen);
     simBox.populateSimulation();
 
+    // TODO: Get this triggered by a flag instead! 
     simBox.print_simulation_stats(); 
 
     // Initialize a structure containing data to be shuttled to the GPU
@@ -1081,4 +1082,87 @@ void simulateWaters(std::string filename) {
 #ifdef DEBUG_DIFFUSION
     diffout.close();
 #endif
+}
+
+__global__ void debug_waters(GPUData d) {
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
+     
+    if(tid < params.num_water) {
+        // Copy water to local register 
+        water_info w = d.waters[tid];
+        updateNearest(&w, d);
+        updateNearestMNP(&w, d);
+        
+        gpu_node* voxel = get_voxel(w.x, w.y, w.z, d);
+        w.field = get_field(w.x, w.y, w.z, voxel, d);
+
+        d.waters[tid] = w;    
+    } 
+}
+
+/**
+ * debugSimulation performs the following operations to test features
+ * of the simulation:
+ *
+ * 1. Generates the specified number of random water molecules and places 
+ *    them within the simulation bound.
+ * 2. Computes the field at each of those positions using the CPU octree
+ *    implementation
+ * 3. Computes the field at each of those positions using the GPU octree
+ *    implementation
+ * 4. Computes the field at each of those positions by trivially looping
+ *    over all the nanoparticles and explicitly computing the field.
+ * 5. Computes the cell and nanoparticle residenc of each point.
+ *
+ * After this procedure, the positions of the water molecules and the
+ * three computed field values associated with each position are written
+ * to the specified text file.
+ */
+void debugSimulation(std::string filename) {
+    // Initialize PRNG seed for MNPs and waters
+    std::random_device rd;
+    XORShift<uint64_t> gen(time(NULL) + rd());
+    ofstream fout(filename); 
+
+    // Initialize GPU random number generator and a linear algebra handler
+    gpu_rng gpu_rand_gen;
+    Handler handle(0); 
+
+    // Initialize a simulation box containing the waters, MNPs, and cells,
+    // and populate it with those components
+    FCCBox simBox(&gen);
+    simBox.populateSimulation();
+ 
+    simBox.print_simulation_stats(); 
+
+    // Initialize a structure containing data to be shuttled to the GPU
+    GPUData d;
+    initGPUParams(); 
+    initOctree(simBox.getOctree(), d);
+ 
+    // GPU memory allocations performed here
+    p_array<water_info> dev_waters(p.num_water, simBox.getWaters(), d.waters);
+    p_array<Triple> dev_lattice(p.num_cells, simBox.getCells(), d.lattice); 
+    p_array<MNP_info> dev_mnps(simBox.getMNPCount(), simBox.getMNPs(), d.mnps);
+
+
+    // Memory uploads to GPU performed here
+    dev_lattice.deviceUpload(); 
+    dev_waters.deviceUpload();
+    dev_mnps.deviceUpload();
+    cpyLookupDevice(simBox.getLookupTable(), d.lookupTable, d.localLookup);
+    cpyLookupDevice(simBox.getMNPLookupTable(), d.mnpLookupTable, d.mnpLocalLookup);
+
+    debug_waters<<<num_blocks, threads_per_block>>>(d);
+    dev_waters.deviceDownload();
+
+    fout << "X, Y, Z, in_cell, in_mnp, GPU Field, Actual Field" << endl;
+    for(int i = 0; i < p.num_water; i++) {
+        double actual_field = simBox.getOctree()->field(dev_waters[i].x, dev_waters[i].y, dev_waters[i].z);
+        fout << dev_waters[i].x << ", " << dev_waters[i].y << ", " << dev_waters[i].z << ", " 
+            << dev_waters[i].in_cell << ", " << dev_waters[i].in_mnp << ", " << dev_waters[i].field << "," << 
+            actual_field << endl; 
+    }
+    fout.close();
+    cout << "Debug prints complete!" << endl;
 }

@@ -55,6 +55,7 @@ class Octree
 
     /* Return field at a water molecule's location */
     double get_field(water_info *w, oct_node *leaf=NULL);
+    double field(double x, double y, double z);
 
     private:
 
@@ -71,7 +72,6 @@ class Octree
     /* Magnetic field profiles */
     double grad(double x, double y, double z, double g);
     double dipole_field(double dx, double dy, double dz, double M);
-    double field(double x, double y, double z);
 
     /* Helpers for octree searches */
     std::vector<oct_node> *find_tree(double wx, double wy, double wz);

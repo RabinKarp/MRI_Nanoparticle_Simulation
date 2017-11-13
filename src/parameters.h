@@ -22,7 +22,7 @@
 #undef DEBUG_FIELD          // create output file w/ B_z at all leaf nodes?
 
 #define DEBUG_DIFFUSION      // create a file w/ norm-squred displacements of waters? 
-#define UNCLUSTERED
+#define CLUSTERED
 struct ParameterStruct {
 public:
     STCONST double g = 42.5781e6;             // gyromagnetic ratio in MHz/T
@@ -50,9 +50,9 @@ public:
     /* Related to the cells in the simulation*/
     STCONST int num_cells = 172;               // Number of cells in the FCC lattice 
 
-    STCONST double cell_r = .55;                // cell radius in microns 
-    STCONST double mmoment = 2e-19;         // Magnetic moment for each dipole	
-    STCONST double mnp_radius = 0.02;         // Radius of magnetic material
+    STCONST double cell_r = 9;                // cell radius in microns 
+    STCONST double mmoment = 1.7e-15;         // Magnetic moment for each dipole	
+    STCONST double mnp_radius = 0.1;         // Radius of magnetic material
 
     //Exactly one of these two flags must be set
     #define CalcIntra
@@ -79,7 +79,7 @@ public:
 
     /* Related to the simulation bounds */
     STCONST double fcc_pack=1;
-    STCONST double bound = 11;                               //6*1.4142*.55*2*1.58;  // full box is [0, bound]^3 (microns)
+    STCONST double bound = 76.3675;                               //6*1.4142*.55*2*1.58;  // full box is [0, bound]^3 (microns)
 
     /* All water molecules begin the simulation in a box with dimension
        water_start_bound^3 that is centered in the middle of the larger
@@ -107,7 +107,7 @@ public:
     STCONST int totaltime = 40;               // total time to run for in ms - because of GPU architecture, this
                                             // is constrained to be a discrete integer
     STCONST int t = (int)(totaltime/tau);     // Total time steps
-    STCONST double taucp = .5;               // Carr-Purcell time in ms - up to 3 decimal places of precision 
+    STCONST double taucp = 5.5;               // Carr-Purcell time in ms - up to 3 decimal places of precision 
     STCONST int tcp = (int)(taucp/tau);       // time steps per Carr-Purcell time
 
     

@@ -28,6 +28,7 @@ typedef struct water_info {
     bool in_cell;
     bool in_mnp;
     int nearest;
+    double field;
   public:
     /**
      * The addition of a water_info struct w to this entails adding the (x,y,z)

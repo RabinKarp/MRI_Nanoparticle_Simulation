@@ -95,6 +95,9 @@ void SimulationBox::populateSimulation() {
     
     init_lookuptable();
     init_MNPlookuptable();
+
+    cout << "Before applying boundary conditions, there were " 
+        << num_intra_mnps << " nanoparticles." << endl;
     apply_bcs_on_mnps(); 
 
     // Initialize the octree for fast field computation

@@ -37,8 +37,8 @@ std::string generate_base_filename()
     filename += std::to_string((double)(p.mnp_radius));
     filename += "_mmoment_";
     filename += std::to_string((double)(p.mmoment));
-    filename += "_numclusters_";
-    filename += std::to_string((int)(p.num_mnps));
+    //filename += "_numclusters_";
+    //filename += std::to_string((int)(p.num_mnps));
     filename += "_cellcount_";
     filename += std::to_string((int)(p.num_cells));
     filename += "_boundarymicrons_";
@@ -67,5 +67,7 @@ std::string generate_base_filename()
  */
 int main(int argc, char** argv) {
     std::string fName = generate_base_filename();
-    simulateWaters(fName);
+    //simulateWaters(fName);
+    cout << "WARNING: DEBUGGING IN PROGRESS, see line 70 of T2_GPU_Sim.cu" << endl;
+    debugSimulation("debug_print.csv");
 }

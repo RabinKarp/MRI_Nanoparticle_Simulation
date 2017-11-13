@@ -162,7 +162,7 @@ double Octree::get_field(water_info *w, oct_node *leaf)
 /**
  * Determines if a nanoparticle resides in the space encompassed by the node
  * with bottom left front corner (x, y, z) and side length g. Changed for the
- * revised code to include MNPs within a CELL radius, not a scale multiple
+ * singel cell diple code to include MNPs within a CELL radius, not a scale multiple
  * of the cluster radius.
  */
 bool Octree::MNP_in_space(MNP_info *mnp, double x, double y, double z, double g)
@@ -238,7 +238,7 @@ double Octree::grad(double x, double y, double z, double g)
 
         // Don't add a gradient contribution from this cell if we are
         // within a scale multiple of the cell radius 
-        if (NORMSQ(dx, dy, dz) > pow(p.scale * p.cell_r, 2)) {
+        if (NORMSQ(dx, dy, dz) > pow(p.scale * np->r, 2)) {
             // Factor of 10^17 inserted by HD. See magnetic field calculation
             // comment for rationale
             double divisor = pow(NORMSQ(dx, dy, dz), 3.5);

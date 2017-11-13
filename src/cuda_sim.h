@@ -77,5 +77,6 @@ typedef struct GPUData {
 
 
 void simulateWaters(string fName);
+void debugSimulation(string fName);
 
 #endif
