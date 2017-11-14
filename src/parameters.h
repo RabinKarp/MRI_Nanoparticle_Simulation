@@ -20,18 +20,20 @@
 #define DEBUG_MNPS           // create output file w/ all MNP coordinates?
 #undef DEBUG_TREE           // check water/node residency via assertions?
 #undef DEBUG_FIELD          // create output file w/ B_z at all leaf nodes?
+#undef EXPLICIT
+
 
 #define DEBUG_DIFFUSION      // create a file w/ norm-squred displacements of waters? 
-#define CLUSTERED
+#define UNCLUSTERED
 struct ParameterStruct {
 public:
     STCONST double g = 42.5781e6;             // gyromagnetic ratio in MHz/T
     
-    #undef FULL_BOUNDARIES      // use full boundary conditions to calculate field?
-    STCONST double scale = 7;     // calculate B explicitly within scale*R of clusterj 
+    #undef FULL_BOUNDARIES        // use full boundary conditions to calculate field?
+    STCONST double scale = 8.0;     // calculate B explicitly within scale*R of clusterj 
 
-    #ifndef FULL_BOUNDARIES     // otherwise, apply BC's at some cutoff distance
-    STCONST double border = 6;    // boundary from box where we start applying BC's
+    #ifndef FULL_BOUNDARIES       // otherwise, apply BC's at some cutoff distance
+    STCONST double border = 1;    // boundary from box where we start applying BC's
     #endif
 
     STCONST int num_threads = 16; // number of CPU threads to run T2 simulation on
@@ -40,7 +42,7 @@ public:
     #define threads_per_block 192 // Keep this as a multiple of 64
 
     // The variable below must be a multiple of the printing frequency
-    STCONST int sprintSteps = 10000; // Each kernel execution handles AT MOST this many timesteps
+    STCONST int sprintSteps = 5000; // Each kernel execution handles AT MOST this many timesteps
 
     STCONST double prob_labeled = 0.26;       // probability a given cell is labeled
 
@@ -48,11 +50,26 @@ public:
     STCONST int num_water = 4032;             // number of waters in simulation
 
     /* Related to the cells in the simulation*/
-    STCONST int num_cells = 172;               // Number of cells in the FCC lattice 
+    #undef FCC_LATTICE  // Use an FCC lattice? Currently, this is NOT set because an FCC lattice
+                        // has a really large number of cells, and we are unable to handle
+                        // a nanoparticle count of such large magnitude.
+    #define RANDOM_CELLS // Throw the cells randomly in the simulation bound? 
 
-    STCONST double cell_r = 9;                // cell radius in microns 
-    STCONST double mmoment = 1.7e-15;         // Magnetic moment for each dipole	
-    STCONST double mnp_radius = 0.1;         // Radius of magnetic material
+    #ifdef FCC_LATTICE
+    STCONST int num_cells = 172;               // Number of cells in the FCC lattice
+    #elif defined RANDOM_CELLS
+    STCONST int num_cells = 10;                 // Number of cells to throw randomly
+    #endif
+
+    /*
+     * Warning: if random throw is enabled and the cell radius is too large
+     * relative to the simulation bounds, the simulation may enter an infinite
+     * loop where a box containing cells cannot be initialized (not enough free
+     * space)
+     */
+    STCONST double cell_r = 0.55;                // cell radius in microns 
+    STCONST double mmoment = 1.7e-17;         // Magnetic moment for each dipole	
+    STCONST double mnp_radius = 0.02;         // Radius of magnetic material
 
     //Exactly one of these two flags must be set
     #define CalcIntra
@@ -67,7 +84,7 @@ public:
 	#undef	INTRA_EXTRA
 
 #ifdef UNCLUSTERED
-    STCONST int num_mnps = 60*108;       // Number of MNPs to throw in the unclustered case
+    STCONST int num_mnps = 60 * 2;       // Number of MNPs to throw in the unclustered case
 #endif 
 
     #ifdef CONSTANT_KICK 
@@ -79,7 +96,7 @@ public:
 
     /* Related to the simulation bounds */
     STCONST double fcc_pack=1;
-    STCONST double bound = 76.3675;                               //6*1.4142*.55*2*1.58;  // full box is [0, bound]^3 (microns)
+    STCONST double bound = 11;                               //6*1.4142*.55*2*1.58;  // full box is [0, bound]^3 (microns)
 
     /* All water molecules begin the simulation in a box with dimension
        water_start_bound^3 that is centered in the middle of the larger

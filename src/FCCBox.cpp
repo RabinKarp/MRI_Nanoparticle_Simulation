@@ -45,7 +45,8 @@ FCCBox::~FCCBox() {
  * Initializes cells within the simulation bound by throwing them in the
  * configuration of a face-centered cubic lattice.
  */
-void FCCBox::init_cells() {    
+void FCCBox::init_cells() {
+    #ifdef FCC_LATTICE
     for (int i = 0; i < 172; i++)
     {
         for (int j = 0; j < 3; j++)
@@ -54,7 +55,30 @@ void FCCBox::init_cells() {
             fcc[i][j] += p.bound/2;
         }
         cells.emplace_back(fcc[i][0], fcc[i][1], fcc[i][2]); 
-    }             
+    }
+    #elif defined RANDOM_CELLS
+    for(int i = 0; i < p.num_cells; i++) {
+        bool invalid = true;
+        double x, y, z;
+        while(invalid) {
+            invalid = false;
+            x = p.cell_r + gen->rand_pos_double() * (p.bound - 2 * p.cell_r);
+            y = p.cell_r + gen->rand_pos_double() * (p.bound - 2 * p.cell_r);
+            z = p.cell_r + gen->rand_pos_double() * (p.bound - 2 * p.cell_r);
+
+            // Check against overlap with other cells
+            for(int j = 0; j < i; j++) {
+                double dx = cells[j].x - x;
+                double dy = cells[j].y - y;
+                double dz = cells[j].z - z;
+
+                if(NORMSQ(dx, dy, dz) < 4 * p.cell_r * p.cell_r)
+                    invalid = true;
+            }
+        }
+        cells.emplace_back(x, y, z);
+    }
+    #endif
 }
 
 /**

@@ -152,8 +152,9 @@ double Octree::get_field(water_info *w, oct_node *leaf)
     if (leaf->resident)
     {
         std::vector<MNP_info>::iterator np;
-        for (np = leaf->resident->begin(); np < leaf->resident->end(); np++)
+        for (np = leaf->resident->begin(); np < leaf->resident->end(); np++) {
             B += dipole_field(wx - np->x, wy - np->y, wz - np->z, np->M);
+        }
     }
 #endif
     return B;
@@ -236,16 +237,21 @@ double Octree::grad(double x, double y, double z, double g)
         double dz = z - np->z;
         double M = np->M;
 
-        // Don't add a gradient contribution from this cell if we are
-        // within a scale multiple of the cell radius 
-        if (NORMSQ(dx, dy, dz) > pow(p.scale * np->r, 2)) {
+        //if(NORMSQ(dx, dy, dz) < pow(sqrt(3)*g + p.scale * np->r, 2))
+        //    return 0;
+       
+        // Modified: now if we are within a scale multiple, we don't add in the
+        // gradient contribution from a given nanoparticle, but we keep the
+        // contribution from the rest of the nanoparticles
+        if(NORMSQ(dx, dy, dz) > pow(sqrt(3)*g + p.scale * np->r, 2)) {
             // Factor of 10^17 inserted by HD. See magnetic field calculation
             // comment for rationale
             double divisor = pow(NORMSQ(dx, dy, dz), 3.5);
             ret_x += 3e17*M*dx * (1*(dx*dx + dy*dy) - 4*dz*dz) / divisor;
             ret_y += 3e17*M*dy * (1*(dx*dx + dy*dy) - 4*dz*dz) / divisor;
-            ret_z += 3e17*M*dz * (3*(dx*dx + dy*dy) - 2*dz*dz) / divisor;
+            ret_z += 3e17*M*dz * (3*(dx*dx + dy*dy) - 2*dz*dz) / divisor; 
         }
+
     }
 
     return sqrt(NORMSQ(ret_x, ret_y, ret_z));

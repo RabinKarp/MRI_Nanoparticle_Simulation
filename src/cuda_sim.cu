@@ -1161,7 +1161,7 @@ void debugSimulation(std::string filename) {
         double actual_field = simBox.getOctree()->field(dev_waters[i].x, dev_waters[i].y, dev_waters[i].z);
         fout << dev_waters[i].x << ", " << dev_waters[i].y << ", " << dev_waters[i].z << ", " 
             << dev_waters[i].in_cell << ", " << dev_waters[i].in_mnp << ", " << dev_waters[i].field << "," << 
-            actual_field << endl; 
+            actual_field << "," << simBox.getOctree()->get_field(&dev_waters[i], NULL) << endl; 
     }
     fout.close();
     cout << "Debug prints complete!" << endl;
